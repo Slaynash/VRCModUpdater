@@ -183,9 +183,14 @@ namespace VRCModUpdater
             {
                 foreach (KeyValuePair<string, (string, string)> remoteMod in remoteMods)
                 {
-                    if (string.Compare(ReduceVersion(remoteMod.Key), ReduceVersion(installedMod.Key), StringComparison.OrdinalIgnoreCase) > 0)
+                    
+                    if (installedMod.Key == remoteMod.Key)
                     {
-                        if (remoteMod.Value.Item1 != installedMod.Value.Item1)
+                        string reducedRemote = ReduceVersion(remoteMod.Value.Item1);
+                        string reducedLocal = ReduceVersion(installedMod.Value.Item1);
+                        int compareResult = string.Compare(reducedRemote, reducedLocal, StringComparison.OrdinalIgnoreCase);
+                        MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between " + reducedRemote + " and " + reducedLocal + ": " + compareResult);
+                        if (compareResult > 0)
                             toUpdate.Add((installedMod.Key, installedMod.Value.Item2, remoteMod.Value.Item2));
 
                         break;

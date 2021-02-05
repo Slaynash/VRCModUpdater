@@ -28,7 +28,7 @@ namespace VRCModUpdater
             if (IsOpen)
                 return;
 
-            MelonLogger.Msg("Starting window creating");
+            MelonLogger.Msg("Starting window creation");
 
             CheckLightTheme();
 
