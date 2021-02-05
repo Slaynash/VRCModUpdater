@@ -1,6 +1,7 @@
 ﻿using MelonLoader;
 using Mono.Cecil;
 using Newtonsoft.Json;
+using Semver;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -141,6 +142,8 @@ namespace VRCModUpdater
 
                     try
                     {
+                        string modName;
+                        string modVersion;
                         using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(filename, new ReaderParameters { ReadWrite = true }))
                         {
 
@@ -150,18 +153,18 @@ namespace VRCModUpdater
                             if (melonInfoAttribute == null)
                                 continue;
 
-                            string modName = melonInfoAttribute.ConstructorArguments[1].Value as string;
-                            string modVersion = melonInfoAttribute.ConstructorArguments[2].Value as string;
-
-                            if (installedMods.ContainsKey(modName))
-                            {
-                                File.Delete(filename); // Delete duplicated mods
-                                MelonLogger.Msg("Deleted duplicated mod " + modName);
-                                continue;
-                            }
-
-                            installedMods.Add(modName, (modVersion, filename));
+                            modName = melonInfoAttribute.ConstructorArguments[1].Value as string;
+                            modVersion = melonInfoAttribute.ConstructorArguments[2].Value as string;
                         }
+
+                        if (installedMods.ContainsKey(modName))
+                        {
+                            File.Delete(filename); // Delete duplicated mods
+                            MelonLogger.Msg("Deleted duplicated mod " + modName);
+                            continue;
+                        }
+
+                        installedMods.Add(modName, (modVersion, filename));
                     }
                     catch (Exception)
                     {
@@ -186,10 +189,8 @@ namespace VRCModUpdater
                     
                     if (installedMod.Key == remoteMod.Key)
                     {
-                        string reducedRemote = ReduceVersion(remoteMod.Value.Item1);
-                        string reducedLocal = ReduceVersion(installedMod.Value.Item1);
-                        int compareResult = string.Compare(reducedRemote, reducedLocal, StringComparison.OrdinalIgnoreCase);
-                        MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between " + reducedRemote + " and " + reducedLocal + ": " + compareResult);
+                        int compareResult = CompareVersion(remoteMod.Value.Item1, installedMod.Value.Item1);
+                        MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between [remote] " + remoteMod.Value.Item1 + " and [local] " + installedMod.Value.Item1 + ": " + compareResult);
                         if (compareResult > 0)
                             toUpdate.Add((installedMod.Key, installedMod.Value.Item2, remoteMod.Value.Item2));
 
@@ -269,16 +270,79 @@ namespace VRCModUpdater
 ;            }
         }
 
-        private static string ReduceVersion(string original)
+        // left more recent: 1
+        // identicals: 0
+        // right more recent: -1
+        private static int CompareVersion(string left, string right)
+        {
+            left = SanitizePreSemver(left);
+            right = SanitizePreSemver(right);
+
+            if (SemVersion.TryParse(left, out SemVersion leftSemver))
+            {
+                if (!SemVersion.TryParse(right, out SemVersion rightSemver))
+                    return 1;
+
+                MelonLogger.Msg(leftSemver + " vs " + rightSemver);
+
+                return SemVersion.Compare(leftSemver, rightSemver);
+            }
+
+            if (SemVersion.TryParse(right, out SemVersion rightSemver_))
+                return -1;
+
+            double leftReduced = ReduceVersion(left);
+            double rightReduced = ReduceVersion(right);
+
+            int result = leftReduced > rightReduced ? 1 : (leftReduced < rightReduced ? -1 : 0);
+
+            MelonLogger.Warning($"versions \"{left}\" and \"{right}\" aren't semversions. reduced to {leftReduced} and {rightReduced} (result: {result})");
+
+            return result;
+        }
+
+        private static string SanitizePreSemver(string original)
+        {
+            string result = "";
+
+            if (Regex.IsMatch(original, "^[vV]\\d")) // remove "v" at the beginning (case insensitive)
+                original = original.Substring(1);
+
+            string[] split = original.Split('.');
+            for (int i = 0; i < split.Length; ++i)
+            {
+                if (i > 0 && i < 3)
+                    result += ".";
+                else if (i == 3 && int.TryParse(split[2], out int part3)) // 4 digit semversion fix
+                {
+                    if (part3 < 10)
+                        split[2] += "00";
+                    else if (part3 < 100)
+                        split[2] += "0";
+                }
+
+                result += split[i];
+            }
+
+            return result;
+        }
+
+        private static double ReduceVersion(string original)
         {
             string pattern = @"\d";
 
-            StringBuilder sb = new StringBuilder();
+            string result = "";
 
             foreach (Match m in Regex.Matches(original, pattern))
-                sb.Append(m);
+                result += m;
 
-            return sb.ToString();
+            if (result.Length == 0)
+                return 0;
+
+            if (result.Length > 1)
+                result = result.StartsWith("0") ? (result.Substring(0, 1) + "." + result.Substring(1)) : result;
+
+            return double.Parse(result);
         }
     }
 }
