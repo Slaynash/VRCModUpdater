@@ -1,6 +1,7 @@
 ﻿using MelonLoader;
 using Mono.Cecil;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Semver;
 using System;
 using System.Collections.Generic;
@@ -17,6 +18,8 @@ namespace VRCModUpdater
 {
     public class VRCModUpdaterPlugin : MelonPlugin
     {
+        public const string VERSION = "1.0.0";
+
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
             { "Advanced Safety" , "AdvancedSafety" },
@@ -42,6 +45,7 @@ namespace VRCModUpdater
             { "ThumbParams", "VRCThumbParams" },
         };
 
+        private float postUpdateDisplayDuration = 3f;
         public bool isUpdatingMods = true;
 
         // name, (version, downloadlink)
@@ -57,12 +61,18 @@ namespace VRCModUpdater
 
         public override void OnApplicationStart()
         {
+            var prefCategory = MelonPreferences.CreateCategory("VRCModUpdater");
+            var diplayTimeEntry = prefCategory.CreateEntry("displaytime", postUpdateDisplayDuration, "Display time (seconds)");
+            if (float.TryParse(diplayTimeEntry.GetValueAsString(), out float diplayTime))
+                postUpdateDisplayDuration = diplayTime;
+
             UpdaterWindow.CreateWindow();
 
             new Thread(() =>
             {
                 try
                 {
+                    CheckForUpdates();
                     UpdateMods();
                 }
                 catch (Exception e)
@@ -107,6 +117,38 @@ namespace VRCModUpdater
             }
         }
 
+        private void CheckForUpdates()
+        {
+            string githubResponse;
+            try
+            {
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create("https://api.github.com/repos/Slaynash/VRCModUpdater/releases/latest");
+                request.Method = "GET";
+                request.KeepAlive = true;
+                request.ContentType = "application/x-www-form-urlencoded";
+                request.UserAgent = $"VRCModUpdater/{VERSION}";
+                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                using (StreamReader requestReader = new StreamReader(response.GetResponseStream()))
+                {
+                    githubResponse = requestReader.ReadToEnd();
+                }
+            }
+            catch (Exception e)
+            {
+                MelonLogger.Error("Failed to fetch latest plugin version info from github:\n" + e);
+                return;
+            }
+
+            JObject obj = JsonConvert.DeserializeObject(githubResponse) as JObject;
+
+            string latestVersion = obj["tag_string"].ToString();
+
+            if (latestVersion != VERSION)
+            {
+                Externs.MessageBox(UpdaterWindow.IsOpen ? UpdaterWindow.hWindow : IntPtr.Zero, "A new update of VRCModUpdater is available", "VRCModUpdater", 0x0);
+            }
+        }
+
         private void UpdateMods()
         {
             Thread.Sleep(500);
@@ -118,7 +160,7 @@ namespace VRCModUpdater
             currentStatus = "";
             DownloadAndUpdateMods();
             currentStatus = toUpdateCount > 0 ? "Sucessfully updated " + toUpdateCount + " mods !" : "Every mods are already up to date !";
-            Thread.Sleep(1000);
+            Thread.Sleep((int)(postUpdateDisplayDuration * 1000));
         }
 
         private void FetchRemoteMods()

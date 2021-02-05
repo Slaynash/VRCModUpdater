@@ -77,6 +77,9 @@ namespace VRCModUpdater.Utils
         [DllImport("user32.dll")]
         public static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
 
+        [DllImport("User32.dll")]
+        public static extern int MessageBox(IntPtr nWnd, string text, string title, uint type);
+
         // gdi32.dll
 
         [DllImport("gdi32.dll")]

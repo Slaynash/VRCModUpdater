@@ -12,7 +12,7 @@ namespace VRCModUpdater
     {
         private static bool lightMode = true;
 
-        private static IntPtr hWindow;
+        internal static IntPtr hWindow;
         public static bool IsOpen { get; private set; }
         public static bool IsWindowClosing { get; private set; }
 
