@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using VRCModUpdater.API;
 using VRCModUpdater.Utils;
@@ -181,9 +183,9 @@ namespace VRCModUpdater
             {
                 foreach (KeyValuePair<string, (string, string)> remoteMod in remoteMods)
                 {
-                    if (remoteMod.Key == installedMod.Key)
+                    if (string.Compare(ReduceVersion(remoteMod.Key), ReduceVersion(installedMod.Key), StringComparison.OrdinalIgnoreCase) > 0)
                     {
-                        if (true || remoteMod.Value.Item1 != installedMod.Value.Item1)
+                        if (remoteMod.Value.Item1 != installedMod.Value.Item1)
                             toUpdate.Add((installedMod.Key, installedMod.Value.Item2, remoteMod.Value.Item2));
 
                         break;
@@ -200,20 +202,25 @@ namespace VRCModUpdater
 
                 MelonLogger.Msg("Updating " + mod.Item1);
                 progressTotal = (int)(i / (double)toUpdateCount * 100);
-                currentStatus = $"Updating {mod.Item1} ({(i+1)} / {toUpdateCount})...";
+                currentStatus = $"Updating {mod.Item1} ({i + 1} / {toUpdateCount})...";
 
                 try
                 {
                     // Delete the file
-                    File.Delete(mod.Item2);
+                    if (File.Exists(mod.Item2 + ".tmp"))
+                        File.Delete(mod.Item2 + ".tmp");
 
+                    bool errored = false;
                     using (var client = new WebClient())
                     {
                         bool downloading = true;
                         client.DownloadFileCompleted += (sender, e) =>
                         {
                             if (e.Error != null)
-                                MelonLogger.Error(e.Error);
+                            {
+                                MelonLogger.Error("Failed to update " + mod.Item1 + ":\n" + e.Error);
+                                errored = true;
+                            }
 
                             progressDownload = 100;
                             downloading = false;
@@ -222,11 +229,29 @@ namespace VRCModUpdater
                         {
                             progressDownload = e.ProgressPercentage;
                         };
-                        MelonLogger.Msg(mod.Item3 + " -> " + mod.Item2);
-                        client.DownloadFileAsync(new Uri(mod.Item3), mod.Item2);
+                        MelonLogger.Msg(mod.Item3 + " -> " + mod.Item2 + ".tmp");
+                        client.DownloadFileAsync(new Uri(mod.Item3), mod.Item2 + ".tmp");
 
                         while (downloading)
                             Thread.Sleep(50);
+                    }
+
+                    if (!errored)
+                    {
+                        File.Delete(mod.Item2);
+                        File.Move(mod.Item2 + ".tmp", mod.Item2);
+                    }
+                    else
+                    {
+                        try
+                        {
+                            if (File.Exists(mod.Item2 + ".tmp"))
+                                File.Delete(mod.Item2 + ".tmp");
+                        }
+                        catch (Exception)
+                        {
+                            MelonLogger.Error("Failed to delete " + mod.Item2 + ".tmp");
+                        }
                     }
                 }
                 catch (Exception e)
@@ -237,6 +262,18 @@ namespace VRCModUpdater
                 progressTotal = (int)((i + 1) / (double)toUpdateCount * 100);
                 MelonLogger.Msg((i + 1) + "/" + toUpdateCount + " -> " + progressTotal + "%");
 ;            }
+        }
+
+        private static string ReduceVersion(string original)
+        {
+            string pattern = @"\d";
+
+            StringBuilder sb = new StringBuilder();
+
+            foreach (Match m in Regex.Matches(original, pattern))
+                sb.Append(m);
+
+            return sb.ToString();
         }
     }
 }
