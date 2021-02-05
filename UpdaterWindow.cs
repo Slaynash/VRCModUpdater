@@ -150,11 +150,9 @@ namespace VRCModUpdater
 
                 case WM.DESTROY:
                     Externs.PostQuitMessage(0);
-                    if (!lightMode)
-                    {
-                        Externs.DeleteObject(hBackgroudBrush);
-                        Externs.DeleteObject(hHardBackgroudBrush);
-                    }
+
+                    Externs.DeleteObject(hBackgroudBrush);
+                    Externs.DeleteObject(hHardBackgroudBrush);
 
                     Externs.DeleteObject(hMelonredBrush);
                     Externs.DeleteObject(hMelongreenBrush);
@@ -167,6 +165,9 @@ namespace VRCModUpdater
                     IntPtr hit = Externs.DefWindowProc(hWnd, (WM)msg, wParam, lParam);
                     if (hit.ToInt32() == 1) hit = new IntPtr(2);
                     return hit;
+
+                case WM.CLOSE:
+                    return IntPtr.Zero;
 
                 case WM.PAINT:
                     PAINTSTRUCT ps;
@@ -188,7 +189,7 @@ namespace VRCModUpdater
 
                     // Text
                     RECT titleRect = new RECT(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
-                    Externs.DrawText(hdc, "VRCModUpdater v0.0.1", -1, ref titleRect, Externs.DT_SINGLELINE | Externs.DT_CENTER | Externs.DT_VCENTER);
+                    Externs.DrawText(hdc, "VRCModUpdater v1.0.0", -1, ref titleRect, Externs.DT_SINGLELINE | Externs.DT_CENTER | Externs.DT_VCENTER);
 
                     // End paint
                     Externs.EndPaint(hWnd, ref ps);

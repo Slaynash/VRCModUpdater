@@ -161,7 +161,7 @@ namespace VRCModUpdater
                             installedMods.Add(modName, (modVersion, filename));
                         }
                     }
-                    catch (Exception e)
+                    catch (Exception)
                     {
                         MelonLogger.Msg("Failed to read assembly " + filename);
                     }
