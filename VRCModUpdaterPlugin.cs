@@ -89,7 +89,7 @@ namespace VRCModUpdater
 
             currentStatus = "";
             DownloadAndUpdateMods();
-            currentStatus = toUpdateCount > 0 ? "Sucessfully updated " + toUpdateCount + " mods !" : "Every mods are already up to date !";
+            currentStatus = toUpdateCount > 0 ? "Sucessfully updated " + toUpdateCount + " mods !" : "All installed mods are already up to date!";
             Thread.Sleep(1000);
         }
 
@@ -161,7 +161,7 @@ namespace VRCModUpdater
                             installedMods.Add(modName, (modVersion, filename));
                         }
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
                         MelonLogger.Msg("Failed to read assembly " + filename);
                     }
