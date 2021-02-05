@@ -17,6 +17,31 @@ namespace VRCModUpdater
 {
     public class VRCModUpdaterPlugin : MelonPlugin
     {
+        private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
+        {
+            { "Advanced Safety" , "AdvancedSafety" },
+            { "Action Menu Respawn", "ActionMenuRespawn" },
+            { "MControl", "MControl (Music Playback Controls)" },
+            { "Player Volume Control", "PlayerVolumeControl" },
+            { "UI Expansion Kit", "UIExpansionKit" },
+            { "NearClipPlaneAdj", "NearClippingPlaneAdjuster.dll" },
+            { "Particle and DynBone limiter settings UI", "ParticleAndBoneLimiterSettings" },
+            { "MuteBlinkBeGone", "Mute Blink Be Gone" },
+            { "DiscordRichPresence-ML", "VRCDiscordRichPresence-ML" },
+            { "Core Limiter", "CoreLimiter" },
+            { "MultiplayerDynamicBones", "Multiplayer Dynamic Bones" },
+            { "Game Priority Changer", "GamePriority" },
+            { "Runtime Graphics Settings", "RuntimeGraphicsSettings" },
+            { "Advanced Invites", "AdvancedInvites" },
+            { "No Steam. At all.", "NoSteamAtAll" },
+            { "Rank Volume Control", "RankVolumeControl" },
+            { "VRC Video Library", "VRCVideoLibrary" },
+            { "Input System", "InputSystem" },
+            { "Toggle Post Processing", "TogglePostProcessing" },
+            { "ToggleMicIcon", "Toggle Mic Icon" },
+            { "ThumbParams", "VRCThumbParams" },
+        };
+
         public bool isUpdatingMods = true;
 
         // name, (version, downloadlink)
@@ -157,10 +182,22 @@ namespace VRCModUpdater
                             modVersion = melonInfoAttribute.ConstructorArguments[2].Value as string;
                         }
 
-                        if (installedMods.ContainsKey(modName))
+                        modName = GetNewModName(modName); // Backward mod compatibility
+
+                        if (installedMods.TryGetValue(modName, out (string, string) modDetails))
                         {
-                            File.Delete(filename); // Delete duplicated mods
-                            MelonLogger.Msg("Deleted duplicated mod " + modName);
+                            if (CompareVersion(modDetails.Item1, modVersion) > 0)
+                            {
+                                File.Delete(filename); // Delete duplicated mods
+                                MelonLogger.Msg("Deleted duplicated mod " + modName);
+                            }
+                            else
+                            {
+                                File.Delete(modDetails.Item2); // Delete duplicated mods
+                                MelonLogger.Msg("Deleted duplicated mod " + modName);
+                                installedMods[modName] = (modVersion, filename);
+                            }
+
                             continue;
                         }
 
@@ -174,6 +211,11 @@ namespace VRCModUpdater
             }
 
             MelonLogger.Msg("Found " + installedMods.Count + " unique non-dev mods installed");
+        }
+
+        private static string GetNewModName(string currentName)
+        {
+            return oldToNewModNames.TryGetValue(currentName, out string newName) ? newName : currentName;
         }
 
         private void DownloadAndUpdateMods()
