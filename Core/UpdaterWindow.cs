@@ -4,7 +4,9 @@ using System;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using VRCModUpdater.Utils;
+using VRCModUpdater.Core.Externs;
+using Windef;
+using Winuser;
 
 namespace VRCModUpdater.Core
 {
@@ -36,7 +38,7 @@ namespace VRCModUpdater.Core
             IntPtr hInstance = Process.GetCurrentProcess().Handle;
             string szClassName = "VRCModUpdaterWinClass";
 
-            WNDCLASS wc = default;
+            WndClass wc = default;
 
             wc.lpfnWndProc = HandleWindowEvent;
 
@@ -46,7 +48,7 @@ namespace VRCModUpdater.Core
             //wc.style = ClassStyles.HorizontalRedraw | ClassStyles.VerticalRedraw;
 
             MelonLogger.Msg("Registering window class");
-            ushort regResult = Externs.RegisterClass(ref wc);
+            ushort regResult = User32.RegisterClass(ref wc);
 
             if (regResult == 0)
             {
@@ -65,7 +67,7 @@ namespace VRCModUpdater.Core
             */
 
             MelonLogger.Msg("Creating window");
-            hWindow = Externs.CreateWindowEx(
+            hWindow = User32.CreateWindowEx(
                 0,                                  // Optional window styles.
                 szClassName,                        // Window class
                 "VRCModUpdater",                    // Window text
@@ -88,7 +90,7 @@ namespace VRCModUpdater.Core
             }
 
             MelonLogger.Msg("Showing window");
-            Externs.ShowWindow(hWindow, ShowWindowCommands.Normal);
+            User32.ShowWindow(hWindow, ShowWindowCommands.Normal);
 
             IsOpen = true;
         }
@@ -96,7 +98,7 @@ namespace VRCModUpdater.Core
         internal static void RedrawWindow()
         {
             if (IsOpen)
-                Externs.InvalidateRect(hWindow, IntPtr.Zero, false);
+                User32.InvalidateRect(hWindow, IntPtr.Zero, false);
         }
 
         internal static void DestroyWindow()
@@ -104,7 +106,7 @@ namespace VRCModUpdater.Core
             MelonLogger.Msg("Destroying window. IsOpen: " + IsOpen);
             if (IsOpen)
             {
-                Externs.DestroyWindow(hWindow);
+                User32.DestroyWindow(hWindow);
                 IsWindowClosing = true;
             }
         }
@@ -124,96 +126,96 @@ namespace VRCModUpdater.Core
 
         private static IntPtr HandleWindowEvent(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
         {
-            switch ((WM)msg)
+            switch ((WindowMessage)msg)
             {
-                case WM.CREATE:
+                case WindowMessage.CREATE:
                     
                     if (lightMode)
                     {
-                        hBackgroudBrush = Externs.CreateSolidBrush(Externs.RGB(255, 255, 255));
-                        hHardBackgroudBrush = Externs.CreateSolidBrush(Externs.RGB(224, 224, 224));
+                        hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(255, 255, 255));
+                        hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(224, 224, 224));
 
-                        foregroundColor = Externs.RGB(0, 0, 0);
+                        foregroundColor = GDI.RGB(0, 0, 0);
                     }
                     else
                     {
-                        hBackgroudBrush = Externs.CreateSolidBrush(Externs.RGB(42, 42, 46));
-                        hHardBackgroudBrush = Externs.CreateSolidBrush(Externs.RGB(54, 57, 63));
+                        hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(42, 42, 46));
+                        hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(54, 57, 63));
 
-                        foregroundColor = Externs.RGB(220, 221, 222);
+                        foregroundColor = GDI.RGB(220, 221, 222);
                     }
 
-                    hMelonredBrush = Externs.CreateSolidBrush(Externs.RGB(255, 59, 106));
-                    hMelongreenBrush = Externs.CreateSolidBrush(Externs.RGB(120, 248, 99));
+                    hMelonredBrush = GDI.CreateSolidBrush(GDI.RGB(255, 59, 106));
+                    hMelongreenBrush = GDI.CreateSolidBrush(GDI.RGB(120, 248, 99));
 
                     return IntPtr.Zero;
 
-                case WM.DESTROY:
-                    Externs.PostQuitMessage(0);
+                case WindowMessage.DESTROY:
+                    User32.PostQuitMessage(0);
 
-                    Externs.DeleteObject(hBackgroudBrush);
-                    Externs.DeleteObject(hHardBackgroudBrush);
+                    GDI.DeleteObject(hBackgroudBrush);
+                    GDI.DeleteObject(hHardBackgroudBrush);
 
-                    Externs.DeleteObject(hMelonredBrush);
-                    Externs.DeleteObject(hMelongreenBrush);
+                    GDI.DeleteObject(hMelonredBrush);
+                    GDI.DeleteObject(hMelongreenBrush);
 
                     IsOpen = false;
 
                     return IntPtr.Zero;
 
-                case WM.NCHITTEST: // Drag'n'Drop everywhere
-                    IntPtr hit = Externs.DefWindowProc(hWnd, (WM)msg, wParam, lParam);
+                case WindowMessage.NCHITTEST: // Drag'n'Drop everywhere
+                    IntPtr hit = User32.DefWindowProc(hWnd, (WindowMessage)msg, wParam, lParam);
                     if (hit.ToInt32() == 1) hit = new IntPtr(2);
                     return hit;
 
-                case WM.CLOSE:
+                case WindowMessage.CLOSE:
                     return IntPtr.Zero;
 
-                case WM.PAINT:
-                    PAINTSTRUCT ps;
-                    RECT rect;
+                case WindowMessage.PAINT:
+                    PaintStruct ps;
+                    Rect rect;
 
                     // Begin paint
-                    IntPtr hdc = Externs.BeginPaint(hWnd, out ps);
-                    Externs.SetBkMode(hdc, Externs.TRANSPARENT);
-                    Externs.SetTextColor(hdc, foregroundColor);
+                    IntPtr hdc = User32.BeginPaint(hWnd, out ps);
+                    GDI.SetBkMode(hdc, BackgroundMode.TRANSPARENT);
+                    GDI.SetTextColor(hdc, foregroundColor);
 
                     // Background
-                    Externs.FillRect(hdc, ref ps.rcPaint, hBackgroudBrush);
+                    User32.FillRect(hdc, ref ps.rcPaint, hBackgroudBrush);
 
-                    Externs.GetClientRect(hWnd, out rect);
+                    User32.GetClientRect(hWnd, out rect);
 
 
                     DrawProgressBar(hdc, VRCModUpdaterCore.progressTotal, VRCModUpdaterCore.currentStatus, 40, rect.Bottom - 100, rect.Right - 40, rect.Bottom - 70);
                     DrawProgressBar(hdc, VRCModUpdaterCore.progressDownload, null, 40, rect.Bottom - 60, rect.Right - 40, rect.Bottom - 30);
 
                     // Text
-                    RECT titleRect = new RECT(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
-                    Externs.DrawText(hdc, "VRCModUpdater v1.0.0", -1, ref titleRect, Externs.DT_SINGLELINE | Externs.DT_CENTER | Externs.DT_VCENTER);
+                    Rect titleRect = new Rect(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
+                    User32.DrawText(hdc, "VRCModUpdater v1.0.0", -1, ref titleRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
 
                     // End paint
-                    Externs.EndPaint(hWnd, ref ps);
+                    User32.EndPaint(hWnd, ref ps);
 
                     return IntPtr.Zero;
             }
 
-            return Externs.DefWindowProc(hWnd, (WM)msg, wParam, lParam);
+            return User32.DefWindowProc(hWnd, (WindowMessage)msg, wParam, lParam);
         }
 
         private static void DrawProgressBar(IntPtr hdc, int progress, string text, int left, int top, int right, int bottom)
         {
-            RECT outterRect = new RECT(left, top, right, bottom);
-            Externs.FillRect(hdc, ref outterRect, hHardBackgroudBrush);
+            Rect outterRect = new Rect(left, top, right, bottom);
+            User32.FillRect(hdc, ref outterRect, hHardBackgroudBrush);
 
             int progressPosition = (int) (progress * 0.01 * (right - left) + left);
 
             if (progressPosition != left)
             {
-                RECT innerRectLeft = new RECT(left, top, progressPosition, bottom);
-                Externs.FillRect(hdc, ref innerRectLeft, lightMode ? hMelongreenBrush : hMelonredBrush);
+                Rect innerRectLeft = new Rect(left, top, progressPosition, bottom);
+                User32.FillRect(hdc, ref innerRectLeft, lightMode ? hMelongreenBrush : hMelonredBrush);
             }
 
-            Externs.DrawText(hdc, text ?? (progress + "%"), -1, ref outterRect, Externs.DT_SINGLELINE | Externs.DT_CENTER | Externs.DT_VCENTER);
+            User32.DrawText(hdc, text ?? (progress + "%"), -1, ref outterRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
         }
     }
 }

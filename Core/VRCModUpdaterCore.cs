@@ -8,11 +8,11 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using VRCModUpdater.API;
-using VRCModUpdater.Utils;
+using VRCModUpdater.Core.Externs;
+using Winuser;
 
 namespace VRCModUpdater.Core
 {
@@ -37,10 +37,8 @@ namespace VRCModUpdater.Core
         private static float postUpdateDisplayDuration = 3f;
         private static bool isUpdatingMods = true;
 
-        // name, (version, downloadlink, hash)
-        private static Dictionary<string, (string, string, string)> remoteMods = new Dictionary<string, (string, string, string)>();
-        // name, (version, filename)
-        private static Dictionary<string, (string, string)> installedMods = new Dictionary<string, (string, string)>();
+        private static Dictionary<string, ModDetail> remoteMods = new Dictionary<string, ModDetail>();
+        private static Dictionary<string, ModDetail> installedMods = new Dictionary<string, ModDetail>();
 
         public static string currentStatus = "", tmpCurrentStatus = "";
         public static int progressTotal = 0, progressDownload = 0;
@@ -86,7 +84,7 @@ namespace VRCModUpdater.Core
 
         private static void DispatchWindowEvents()
         {
-            if (!Externs.PeekMessage(out MSG msg, IntPtr.Zero, 0, 0, 1))
+            if (!User32.PeekMessage(out Msg msg, IntPtr.Zero, 0, 0, 1))
             {
                 if (currentStatus != tmpCurrentStatus || progressTotal != tmpProgressTotal || progressDownload != tmpProgressDownload)
                 {
@@ -100,8 +98,8 @@ namespace VRCModUpdater.Core
             }
             else
             {
-                Externs.TranslateMessage(ref msg);
-                Externs.DispatchMessage(ref msg);
+                User32.TranslateMessage(ref msg);
+                User32.DispatchMessage(ref msg);
             }
         }
 
@@ -145,7 +143,7 @@ namespace VRCModUpdater.Core
                         oldToNewModNames[alias] = versionDetails.name;
 
                 // Add to known mods
-                remoteMods.Add(versionDetails.name, (versionDetails.modversion, versionDetails.downloadlink, versionDetails.hash));
+                remoteMods.Add(versionDetails.name, new ModDetail(versionDetails.name, versionDetails.modversion, versionDetails.downloadlink, versionDetails.hash));
             }
 
             MelonLogger.Msg("API returned " + apiMods.Length + " mods, including " + remoteMods.Count + " verified mods");
@@ -188,24 +186,24 @@ namespace VRCModUpdater.Core
 
                         modName = GetNewModName(modName); // Backward mod compatibility
 
-                        if (installedMods.TryGetValue(modName, out (string, string) modDetails))
+                        if (installedMods.TryGetValue(modName, out ModDetail installedModDetail))
                         {
-                            if (CompareVersion(modDetails.Item1, modVersion) > 0)
+                            if (CompareVersion(installedModDetail.version, modVersion) > 0)
                             {
                                 File.Delete(filename); // Delete duplicated mods
                                 MelonLogger.Msg("Deleted duplicated mod " + modName);
                             }
                             else
                             {
-                                File.Delete(modDetails.Item2); // Delete duplicated mods
+                                File.Delete(installedModDetail.filepath); // Delete duplicated mods
                                 MelonLogger.Msg("Deleted duplicated mod " + modName);
-                                installedMods[modName] = (modVersion, filename);
+                                installedMods[modName] = new ModDetail(modName, modVersion, filename);
                             }
 
                             continue;
                         }
 
-                        installedMods.Add(modName, (modVersion, filename));
+                        installedMods.Add(modName, new ModDetail(modName, modVersion, filename));
                     }
                     catch (Exception)
                     {
@@ -233,21 +231,20 @@ namespace VRCModUpdater.Core
 
         private static void DownloadAndUpdateMods()
         {
-            // name, filename, downloadlink
-            List<(string, string, string, string)> toUpdate = new List<(string, string, string, string)>();
+            List<ModDetail> toUpdate = new List<ModDetail>();
 
             // List all installed mods that can be updated
-            foreach (KeyValuePair<string, (string, string)> installedMod in installedMods)
+            foreach (KeyValuePair<string, ModDetail> installedMod in installedMods)
             {
-                foreach (KeyValuePair<string, (string, string, string)> remoteMod in remoteMods)
+                foreach (KeyValuePair<string, ModDetail> remoteMod in remoteMods)
                 {
                     
                     if (installedMod.Key == remoteMod.Key)
                     {
-                        int compareResult = CompareVersion(remoteMod.Value.Item1, installedMod.Value.Item1);
-                        MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between [remote] " + remoteMod.Value.Item1 + " and [local] " + installedMod.Value.Item1 + ": " + compareResult);
+                        int compareResult = CompareVersion(remoteMod.Value.version, installedMod.Value.version);
+                        MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between [remote] " + remoteMod.Value.version + " and [local] " + installedMod.Value.version + ": " + compareResult);
                         if (compareResult > 0)
-                            toUpdate.Add((installedMod.Key, installedMod.Value.Item2, remoteMod.Value.Item2, remoteMod.Value.Item3));
+                            toUpdate.Add(new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath, remoteMod.Value.downloadUrl, remoteMod.Value.hash));
 
                         break;
                     }
@@ -259,18 +256,14 @@ namespace VRCModUpdater.Core
             toUpdateCount = toUpdate.Count;
             for (int i = 0; i < toUpdateCount; ++i)
             {
-                (string, string, string, string) mod = toUpdate[i];
+                ModDetail mod = toUpdate[i];
 
-                MelonLogger.Msg("Updating " + mod.Item1);
+                MelonLogger.Msg("Updating " + mod.name);
                 progressTotal = (int)(i / (double)toUpdateCount * 100);
-                currentStatus = $"Updating {mod.Item1} ({i + 1} / {toUpdateCount})...";
+                currentStatus = $"Updating {mod.name} ({i + 1} / {toUpdateCount})...";
 
                 try
                 {
-                    // Delete the file
-                    if (File.Exists(mod.Item2 + ".tmp"))
-                        File.Delete(mod.Item2 + ".tmp");
-
                     bool errored = false;
                     using (var client = new WebClient())
                     {
@@ -280,7 +273,7 @@ namespace VRCModUpdater.Core
                         {
                             if (e.Error != null)
                             {
-                                MelonLogger.Error("Failed to update " + mod.Item1 + ":\n" + e.Error);
+                                MelonLogger.Error("Failed to update " + mod.name + ":\n" + e.Error);
                                 errored = true;
                             }
 
@@ -292,7 +285,7 @@ namespace VRCModUpdater.Core
                         {
                             progressDownload = e.ProgressPercentage;
                         };
-                        client.DownloadDataAsync(new Uri(mod.Item3));
+                        client.DownloadDataAsync(new Uri(mod.downloadUrl));
 
                         while (downloading)
                             Thread.Sleep(50);
@@ -302,15 +295,15 @@ namespace VRCModUpdater.Core
                             string downloadedHash = ComputeSha256Hash(downloadedFileData);
                             MelonLogger.Msg("Downloaded file hash: " + downloadedHash);
 
-                            if (downloadedHash == mod.Item4)
+                            if (downloadedHash == mod.hash)
                             {
                                 try
                                 {
-                                    File.WriteAllBytes(mod.Item2, downloadedFileData);
+                                    File.WriteAllBytes(mod.filepath, downloadedFileData);
                                 }
                                 catch (Exception e)
                                 {
-                                    MelonLogger.Error("Failed to save " + mod.Item2 + ":\n" + e);
+                                    MelonLogger.Error("Failed to save " + mod.filepath + ":\n" + e);
                                 }
 
                             }
@@ -323,7 +316,7 @@ namespace VRCModUpdater.Core
                 }
                 catch (Exception e)
                 {
-                    MelonLogger.Error("Failed to update " + mod.Item1 + ":\n" + e);
+                    MelonLogger.Error("Failed to update " + mod.filepath + ":\n" + e);
                 }
 
                 progressTotal = (int)((i + 1) / (double)toUpdateCount * 100);
