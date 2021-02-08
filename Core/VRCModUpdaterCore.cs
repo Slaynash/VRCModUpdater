@@ -16,7 +16,7 @@ namespace VRCModUpdater.Core
 {
     public static class VRCModUpdaterCore
     {
-        public const string VERSION = "1.0.0";
+        public const string VERSION = "0.0.1";
 
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
