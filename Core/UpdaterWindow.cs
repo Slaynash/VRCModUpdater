@@ -47,15 +47,12 @@ namespace VRCModUpdater.Core
 
             //wc.style = ClassStyles.HorizontalRedraw | ClassStyles.VerticalRedraw;
 
-            MelonLogger.Msg("Registering window class");
-            ushort regResult = User32.RegisterClass(ref wc);
+            if (lightMode)
+                hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(255, 255, 255));
+            else
+                hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(42, 42, 46));
 
-            if (regResult == 0)
-            {
-                MelonLogger.Warning("Failed to register updater window. Updating in windowless mode");
-                return;
-            }
-
+            wc.hbrBackground = hBackgroudBrush;
             /*
             wc.cbClsExtra = 0;
             wc.cbWndExtra = 0;
@@ -65,6 +62,16 @@ namespace VRCModUpdater.Core
             wc.lpszMenuName = null;
             wc.lpszClassName = szAppName;
             */
+
+            MelonLogger.Msg("Registering window class");
+            ushort regResult = User32.RegisterClass(ref wc);
+
+            if (regResult == 0)
+            {
+                MelonLogger.Warning("Failed to register updater window. Updating in windowless mode");
+                GDI.DeleteObject(hBackgroudBrush);
+                return;
+            }
 
             MelonLogger.Msg("Creating window");
             hWindow = User32.CreateWindowEx(
@@ -86,6 +93,7 @@ namespace VRCModUpdater.Core
                 int lastError = Marshal.GetLastWin32Error();
                 string errorMessage = new Win32Exception(lastError).Message;
                 MelonLogger.Warning("Failed to create updater window. Updating in windowless mode. Error:\n" + errorMessage);
+                GDI.DeleteObject(hBackgroudBrush);
                 return;
             }
 
@@ -132,14 +140,12 @@ namespace VRCModUpdater.Core
                     
                     if (lightMode)
                     {
-                        hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(255, 255, 255));
                         hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(224, 224, 224));
 
                         foregroundColor = GDI.RGB(0, 0, 0);
                     }
                     else
                     {
-                        hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(42, 42, 46));
                         hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(54, 57, 63));
 
                         foregroundColor = GDI.RGB(220, 221, 222);
@@ -181,7 +187,7 @@ namespace VRCModUpdater.Core
                     GDI.SetTextColor(hdc, foregroundColor);
 
                     // Background
-                    User32.FillRect(hdc, ref ps.rcPaint, hBackgroudBrush);
+                    //User32.FillRect(hdc, ref ps.rcPaint, hBackgroudBrush);
 
                     User32.GetClientRect(hWnd, out rect);
 
