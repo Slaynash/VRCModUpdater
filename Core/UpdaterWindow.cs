@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using VRCModUpdater.Core.Externs;
+using VRCModUpdater.Loader;
 using Windef;
 using Winuser;
 
@@ -197,7 +198,10 @@ namespace VRCModUpdater.Core
 
                     // Text
                     Rect titleRect = new Rect(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
-                    User32.DrawText(hdc, "VRCModUpdater v" + VRCModUpdaterCore.VERSION, -1, ref titleRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
+                    User32.DrawText(hdc, "VRCModUpdater", -1, ref titleRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
+
+                    User32.DrawText(hdc, $"Loader v{VRCModUpdaterPlugin.VERSION}\nCore v{VRCModUpdaterPlugin.VERSION}", -1, ref titleRect, DrawText.LEFT | DrawText.TOP);
+                    User32.DrawText(hdc, $"MelonLoader {BuildInfo.Version}\nVRChat {UnityEngine.Application.version}", -1, ref titleRect, DrawText.RIGHT | DrawText.TOP);
 
                     // End paint
                     User32.EndPaint(hWnd, ref ps);

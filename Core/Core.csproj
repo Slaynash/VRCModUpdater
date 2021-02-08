@@ -113,6 +113,12 @@
   <ItemGroup>
     <None Include="packages.config" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Loader\Loader.csproj">
+      <Project>{673205c7-6ed1-4cdc-9bce-3042ee819276}</Project>
+      <Name>Loader</Name>
+    </ProjectReference>
+  </ItemGroup>
   <!--Build Targets-->
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\packages\ILRepack.Lib.MSBuild.Task.2.0.18.2\build\ILRepack.Lib.MSBuild.Task.targets" Condition="Exists('..\packages\ILRepack.Lib.MSBuild.Task.2.0.18.2\build\ILRepack.Lib.MSBuild.Task.targets')" />
