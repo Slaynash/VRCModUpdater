@@ -1,12 +1,12 @@
 ﻿using MelonLoader;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using VRCModUpdater;
+using VRCModUpdater.Loader;
 
 // Les informations générales relatives à un assembly dépendent de
 // l'ensemble d'attributs suivant. Changez les valeurs de ces attributs pour modifier les informations
 // associées à un assembly.
-[assembly: AssemblyTitle("VRCModUpdater")]
+[assembly: AssemblyTitle("VRCModUpdater.Loader")]
 [assembly: AssemblyDescription("Automatic mod updater plugin for VRChat, using MelonLoader")]
 [assembly: AssemblyCompany("VRChat Modding Group")]
 [assembly: AssemblyProduct("VRCModUpdater")]
@@ -18,7 +18,7 @@ using VRCModUpdater;
 [assembly: ComVisible(false)]
 
 // Le GUID suivant est pour l'ID de la typelib si ce projet est exposé à COM
-[assembly: Guid("40b6b5c1-80a7-4714-9a61-b30b12e38776")]
+[assembly: Guid("673205c7-6ed1-4cdc-9bce-3042ee819276")]
 
 // Les informations de version pour un assembly se composent des quatre valeurs suivantes :
 //

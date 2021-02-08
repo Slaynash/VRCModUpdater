@@ -1,22 +1,20 @@
 ﻿using MelonLoader;
 using Mono.Cecil;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Semver;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using VRCModUpdater.API;
 using VRCModUpdater.Utils;
 
-namespace VRCModUpdater
+namespace VRCModUpdater.Core
 {
-    public class VRCModUpdaterPlugin : MelonPlugin
+    public static class VRCModUpdaterCore
     {
         public const string VERSION = "1.0.0";
 
@@ -45,21 +43,21 @@ namespace VRCModUpdater
             { "ThumbParams", "VRCThumbParams" },
         };
 
-        private float postUpdateDisplayDuration = 3f;
-        public bool isUpdatingMods = true;
+        private static float postUpdateDisplayDuration = 3f;
+        private static bool isUpdatingMods = true;
 
         // name, (version, downloadlink)
-        public Dictionary<string, (string, string)> remoteMods = new Dictionary<string, (string, string)>();
+        private static Dictionary<string, (string, string)> remoteMods = new Dictionary<string, (string, string)>();
         // name, (version, filename)
-        public Dictionary<string, (string, string)> installedMods = new Dictionary<string, (string, string)>();
+        private static Dictionary<string, (string, string)> installedMods = new Dictionary<string, (string, string)>();
 
         public static string currentStatus = "", tmpCurrentStatus = "";
-        public static int progressTotal = 0, tmpProgressTotal = 0;
-        public static int progressDownload = 0, tmpProgressDownload = 0;
+        public static int progressTotal = 0, progressDownload = 0;
+        private static int tmpProgressTotal = 0, tmpProgressDownload = 0;
 
-        private int toUpdateCount = 0;
+        private static int toUpdateCount = 0;
 
-        public override void OnApplicationStart()
+        public static void Start()
         {
             var prefCategory = MelonPreferences.CreateCategory("VRCModUpdater");
             var diplayTimeEntry = prefCategory.CreateEntry("displaytime", postUpdateDisplayDuration, "Display time (seconds)");
@@ -72,7 +70,6 @@ namespace VRCModUpdater
             {
                 try
                 {
-                    CheckForUpdates();
                     UpdateMods();
                 }
                 catch (Exception e)
@@ -96,7 +93,7 @@ namespace VRCModUpdater
             }
         }
 
-        private void DispatchWindowEvents()
+        private static void DispatchWindowEvents()
         {
             if (!Externs.PeekMessage(out MSG msg, IntPtr.Zero, 0, 0, 1))
             {
@@ -117,39 +114,7 @@ namespace VRCModUpdater
             }
         }
 
-        private void CheckForUpdates()
-        {
-            string githubResponse;
-            try
-            {
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create("https://api.github.com/repos/Slaynash/VRCModUpdater/releases/latest");
-                request.Method = "GET";
-                request.KeepAlive = true;
-                request.ContentType = "application/x-www-form-urlencoded";
-                request.UserAgent = $"VRCModUpdater/{VERSION}";
-                HttpWebResponse response = (HttpWebResponse)request.GetResponse();
-                using (StreamReader requestReader = new StreamReader(response.GetResponseStream()))
-                {
-                    githubResponse = requestReader.ReadToEnd();
-                }
-            }
-            catch (Exception e)
-            {
-                MelonLogger.Error("Failed to fetch latest plugin version info from github:\n" + e);
-                return;
-            }
-
-            JObject obj = JsonConvert.DeserializeObject(githubResponse) as JObject;
-
-            string latestVersion = obj["tag_string"].ToString();
-
-            if (latestVersion != VERSION)
-            {
-                Externs.MessageBox(UpdaterWindow.IsOpen ? UpdaterWindow.hWindow : IntPtr.Zero, "A new update of VRCModUpdater is available", "VRCModUpdater", 0x0);
-            }
-        }
-
-        private void UpdateMods()
+        private static void UpdateMods()
         {
             Thread.Sleep(500);
             currentStatus = "Fetching remote mods...";
@@ -163,7 +128,7 @@ namespace VRCModUpdater
             Thread.Sleep((int)(postUpdateDisplayDuration * 1000));
         }
 
-        private void FetchRemoteMods()
+        private static void FetchRemoteMods()
         {
             string apiResponse;
             using (var client = new WebClient())
@@ -189,7 +154,7 @@ namespace VRCModUpdater
             MelonLogger.Msg("API returned " + apiMods.Length + " mods, including " + remoteMods.Count + " verified mods");
         }
 
-        private void ScanModFolder()
+        private static void ScanModFolder()
         {
             installedMods.Clear();
 
@@ -260,7 +225,7 @@ namespace VRCModUpdater
             return oldToNewModNames.TryGetValue(currentName, out string newName) ? newName : currentName;
         }
 
-        private void DownloadAndUpdateMods()
+        private static void DownloadAndUpdateMods()
         {
             // name, filename, downloadlink
             List<(string, string, string)> toUpdate = new List<(string, string, string)>();

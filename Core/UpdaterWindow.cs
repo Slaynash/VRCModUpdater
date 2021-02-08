@@ -6,7 +6,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using VRCModUpdater.Utils;
 
-namespace VRCModUpdater
+namespace VRCModUpdater.Core
 {
     class UpdaterWindow
     {
@@ -184,8 +184,8 @@ namespace VRCModUpdater
                     Externs.GetClientRect(hWnd, out rect);
 
 
-                    DrawProgressBar(hdc, VRCModUpdaterPlugin.progressTotal, VRCModUpdaterPlugin.currentStatus, 40, rect.Bottom - 100, rect.Right - 40, rect.Bottom - 70);
-                    DrawProgressBar(hdc, VRCModUpdaterPlugin.progressDownload, null, 40, rect.Bottom - 60, rect.Right - 40, rect.Bottom - 30);
+                    DrawProgressBar(hdc, VRCModUpdaterCore.progressTotal, VRCModUpdaterCore.currentStatus, 40, rect.Bottom - 100, rect.Right - 40, rect.Bottom - 70);
+                    DrawProgressBar(hdc, VRCModUpdaterCore.progressDownload, null, 40, rect.Bottom - 60, rect.Right - 40, rect.Bottom - 30);
 
                     // Text
                     RECT titleRect = new RECT(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
