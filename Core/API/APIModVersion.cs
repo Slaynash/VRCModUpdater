@@ -6,5 +6,6 @@
         public string name;
         public string modversion;
         public string downloadlink;
+        public string hash;
     }
 }

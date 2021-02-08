@@ -7,6 +7,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using VRCModUpdater.API;
@@ -35,8 +37,8 @@ namespace VRCModUpdater.Core
         private static float postUpdateDisplayDuration = 3f;
         private static bool isUpdatingMods = true;
 
-        // name, (version, downloadlink)
-        private static Dictionary<string, (string, string)> remoteMods = new Dictionary<string, (string, string)>();
+        // name, (version, downloadlink, hash)
+        private static Dictionary<string, (string, string, string)> remoteMods = new Dictionary<string, (string, string, string)>();
         // name, (version, filename)
         private static Dictionary<string, (string, string)> installedMods = new Dictionary<string, (string, string)>();
 
@@ -143,7 +145,7 @@ namespace VRCModUpdater.Core
                         oldToNewModNames[alias] = versionDetails.name;
 
                 // Add to known mods
-                remoteMods.Add(versionDetails.name, (versionDetails.modversion, versionDetails.downloadlink));
+                remoteMods.Add(versionDetails.name, (versionDetails.modversion, versionDetails.downloadlink, versionDetails.hash));
             }
 
             MelonLogger.Msg("API returned " + apiMods.Length + " mods, including " + remoteMods.Count + " verified mods");
@@ -220,15 +222,24 @@ namespace VRCModUpdater.Core
             return oldToNewModNames.TryGetValue(currentName, out string newName) ? newName : currentName;
         }
 
+        private static string ComputeSha256Hash(byte[] rawData)
+        {
+            using (SHA256 sha256Hash = SHA256.Create())
+            {
+                byte[] bytes = sha256Hash.ComputeHash(rawData);
+                return Convert.ToBase64String(bytes);
+            }
+        }
+
         private static void DownloadAndUpdateMods()
         {
             // name, filename, downloadlink
-            List<(string, string, string)> toUpdate = new List<(string, string, string)>();
+            List<(string, string, string, string)> toUpdate = new List<(string, string, string, string)>();
 
             // List all installed mods that can be updated
             foreach (KeyValuePair<string, (string, string)> installedMod in installedMods)
             {
-                foreach (KeyValuePair<string, (string, string)> remoteMod in remoteMods)
+                foreach (KeyValuePair<string, (string, string, string)> remoteMod in remoteMods)
                 {
                     
                     if (installedMod.Key == remoteMod.Key)
@@ -236,7 +247,7 @@ namespace VRCModUpdater.Core
                         int compareResult = CompareVersion(remoteMod.Value.Item1, installedMod.Value.Item1);
                         MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between [remote] " + remoteMod.Value.Item1 + " and [local] " + installedMod.Value.Item1 + ": " + compareResult);
                         if (compareResult > 0)
-                            toUpdate.Add((installedMod.Key, installedMod.Value.Item2, remoteMod.Value.Item2));
+                            toUpdate.Add((installedMod.Key, installedMod.Value.Item2, remoteMod.Value.Item2, remoteMod.Value.Item3));
 
                         break;
                     }
@@ -248,7 +259,7 @@ namespace VRCModUpdater.Core
             toUpdateCount = toUpdate.Count;
             for (int i = 0; i < toUpdateCount; ++i)
             {
-                (string, string, string) mod = toUpdate[i];
+                (string, string, string, string) mod = toUpdate[i];
 
                 MelonLogger.Msg("Updating " + mod.Item1);
                 progressTotal = (int)(i / (double)toUpdateCount * 100);
@@ -264,7 +275,8 @@ namespace VRCModUpdater.Core
                     using (var client = new WebClient())
                     {
                         bool downloading = true;
-                        client.DownloadFileCompleted += (sender, e) =>
+                        byte[] downloadedFileData = null;
+                        client.DownloadDataCompleted += (sender, e) =>
                         {
                             if (e.Error != null)
                             {
@@ -274,33 +286,38 @@ namespace VRCModUpdater.Core
 
                             progressDownload = 100;
                             downloading = false;
+                            downloadedFileData = e.Result;
                         };
                         client.DownloadProgressChanged += (sender, e) =>
                         {
                             progressDownload = e.ProgressPercentage;
                         };
-                        MelonLogger.Msg(mod.Item3 + " -> " + mod.Item2 + ".tmp");
-                        client.DownloadFileAsync(new Uri(mod.Item3), mod.Item2 + ".tmp");
+                        client.DownloadDataAsync(new Uri(mod.Item3));
 
                         while (downloading)
                             Thread.Sleep(50);
-                    }
 
-                    if (!errored)
-                    {
-                        File.Delete(mod.Item2);
-                        File.Move(mod.Item2 + ".tmp", mod.Item2);
-                    }
-                    else
-                    {
-                        try
+                        if (!errored)
                         {
-                            if (File.Exists(mod.Item2 + ".tmp"))
-                                File.Delete(mod.Item2 + ".tmp");
-                        }
-                        catch (Exception)
-                        {
-                            MelonLogger.Error("Failed to delete " + mod.Item2 + ".tmp");
+                            string downloadedHash = ComputeSha256Hash(downloadedFileData);
+                            MelonLogger.Msg("Downloaded file hash: " + downloadedHash);
+
+                            if (downloadedHash == mod.Item4)
+                            {
+                                try
+                                {
+                                    File.WriteAllBytes(mod.Item2, downloadedFileData);
+                                }
+                                catch (Exception e)
+                                {
+                                    MelonLogger.Error("Failed to save " + mod.Item2 + ":\n" + e);
+                                }
+
+                            }
+                            else
+                            {
+                                MelonLogger.Error("Downloaded file hash mismatches database hash!");
+                            }
                         }
                     }
                 }
