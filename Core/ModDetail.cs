@@ -1,6 +1,6 @@
 ﻿namespace VRCModUpdater.Core
 {
-    class ModDetail
+    public class ModDetail
     {
         public string name;
         public string version;

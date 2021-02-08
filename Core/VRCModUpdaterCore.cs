@@ -1,17 +1,16 @@
 ﻿using MelonLoader;
 using Mono.Cecil;
 using Newtonsoft.Json;
-using Semver;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
-using System.Text.RegularExpressions;
 using System.Threading;
 using VRCModUpdater.API;
 using VRCModUpdater.Core.Externs;
+using VRCModUpdater.Core.Utils;
 using Winuser;
 
 namespace VRCModUpdater.Core
@@ -45,6 +44,8 @@ namespace VRCModUpdater.Core
         private static int tmpProgressTotal = 0, tmpProgressDownload = 0;
 
         private static int toUpdateCount = 0;
+
+        private static List<FailedUpdateInfo> failedUpdates = new List<FailedUpdateInfo>();
 
         public static void Start()
         {
@@ -113,7 +114,14 @@ namespace VRCModUpdater.Core
 
             currentStatus = "";
             DownloadAndUpdateMods();
-            currentStatus = toUpdateCount > 0 ? "Sucessfully updated " + toUpdateCount + " mods !" : "Every mods are already up to date !";
+
+            if (toUpdateCount == 0)
+                currentStatus = "Every mods are already up to date !";
+            else if (failedUpdates.Count > 0)
+                currentStatus = $"{failedUpdates.Count} mods failed to update ({toUpdateCount - failedUpdates.Count}/{toUpdateCount} succeeded)";
+            else
+                currentStatus = "Sucessfully updated " + toUpdateCount + " mods !";
+
             Thread.Sleep((int)(postUpdateDisplayDuration * 1000));
         }
 
@@ -188,7 +196,7 @@ namespace VRCModUpdater.Core
 
                         if (installedMods.TryGetValue(modName, out ModDetail installedModDetail))
                         {
-                            if (CompareVersion(installedModDetail.version, modVersion) > 0)
+                            if (VersionUtils.CompareVersion(installedModDetail.version, modVersion) > 0)
                             {
                                 File.Delete(filename); // Delete duplicated mods
                                 MelonLogger.Msg("Deleted duplicated mod " + modName);
@@ -236,12 +244,13 @@ namespace VRCModUpdater.Core
             // List all installed mods that can be updated
             foreach (KeyValuePair<string, ModDetail> installedMod in installedMods)
             {
+                VersionUtils.VersionData installedModVersion = VersionUtils.GetVersion(installedMod.Value.version);
                 foreach (KeyValuePair<string, ModDetail> remoteMod in remoteMods)
                 {
-                    
                     if (installedMod.Key == remoteMod.Key)
                     {
-                        int compareResult = CompareVersion(remoteMod.Value.version, installedMod.Value.version);
+                        VersionUtils.VersionData remoteModVersion = VersionUtils.GetVersion(remoteMod.Value.version);
+                        int compareResult = VersionUtils.CompareVersion(remoteModVersion, installedModVersion);
                         MelonLogger.Msg("(Mod: " + remoteMod.Key + ") version compare between [remote] " + remoteMod.Value.version + " and [local] " + installedMod.Value.version + ": " + compareResult);
                         if (compareResult > 0)
                             toUpdate.Add(new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath, remoteMod.Value.downloadUrl, remoteMod.Value.hash));
@@ -275,6 +284,7 @@ namespace VRCModUpdater.Core
                             {
                                 MelonLogger.Error("Failed to update " + mod.name + ":\n" + e.Error);
                                 errored = true;
+                                failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.DownloadError, e.ToString()));
                             }
 
                             progressDownload = 100;
@@ -304,12 +314,14 @@ namespace VRCModUpdater.Core
                                 catch (Exception e)
                                 {
                                     MelonLogger.Error("Failed to save " + mod.filepath + ":\n" + e);
+                                    failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.SaveError, e.ToString()));
                                 }
 
                             }
                             else
                             {
                                 MelonLogger.Error("Downloaded file hash mismatches database hash!");
+                                failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.HashMismatch, $"Expected hash: {mod.hash}, Downloaded file hash: {downloadedHash}"));
                             }
                         }
                     }
@@ -317,86 +329,12 @@ namespace VRCModUpdater.Core
                 catch (Exception e)
                 {
                     MelonLogger.Error("Failed to update " + mod.filepath + ":\n" + e);
+                    failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.Unknown, e.ToString()));
                 }
 
                 progressTotal = (int)((i + 1) / (double)toUpdateCount * 100);
-                MelonLogger.Msg((i + 1) + "/" + toUpdateCount + " -> " + progressTotal + "%");
+                MelonLogger.Msg($"Progress: {i + 1}/{toUpdateCount} -> {progressTotal}%");
 ;            }
-        }
-
-        // left more recent: 1
-        // identicals: 0
-        // right more recent: -1
-        private static int CompareVersion(string left, string right)
-        {
-            left = SanitizePreSemver(left);
-            right = SanitizePreSemver(right);
-
-            if (SemVersion.TryParse(left, out SemVersion leftSemver))
-            {
-                if (!SemVersion.TryParse(right, out SemVersion rightSemver))
-                    return 1;
-
-                MelonLogger.Msg(leftSemver + " vs " + rightSemver);
-
-                return SemVersion.Compare(leftSemver, rightSemver);
-            }
-
-            if (SemVersion.TryParse(right, out SemVersion rightSemver_))
-                return -1;
-
-            double leftReduced = ReduceVersion(left);
-            double rightReduced = ReduceVersion(right);
-
-            int result = leftReduced > rightReduced ? 1 : (leftReduced < rightReduced ? -1 : 0);
-
-            MelonLogger.Warning($"versions \"{left}\" and \"{right}\" aren't semversions. reduced to {leftReduced} and {rightReduced} (result: {result})");
-
-            return result;
-        }
-
-        private static string SanitizePreSemver(string original)
-        {
-            string result = "";
-
-            if (Regex.IsMatch(original, "^[vV]\\d")) // remove "v" at the beginning (case insensitive)
-                original = original.Substring(1);
-
-            string[] split = original.Split('.');
-            for (int i = 0; i < split.Length; ++i)
-            {
-                if (i > 0 && i < 3)
-                    result += ".";
-                else if (i == 3 && int.TryParse(split[2], out int part3)) // 4 digit semversion fix
-                {
-                    if (part3 < 10)
-                        split[2] += "00";
-                    else if (part3 < 100)
-                        split[2] += "0";
-                }
-
-                result += split[i];
-            }
-
-            return result;
-        }
-
-        private static double ReduceVersion(string original)
-        {
-            string pattern = @"\d";
-
-            string result = "";
-
-            foreach (Match m in Regex.Matches(original, pattern))
-                result += m;
-
-            if (result.Length == 0)
-                return 0;
-
-            if (result.Length > 1)
-                result = result.StartsWith("0") ? (result.Substring(0, 1) + "." + result.Substring(1)) : result;
-
-            return double.Parse(result);
         }
     }
 }
