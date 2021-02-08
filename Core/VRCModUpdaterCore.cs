@@ -20,32 +20,16 @@ namespace VRCModUpdater.Core
 
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
-            { "AdvancedSafety" , "Advanced Safety" },
-            { "Action Menu Respawn", "ActionMenuRespawn" },
-            { "MControl (Music Playback Controls)", "MControl" },
-            { "UIExpansionKit", "UI Expansion Kit" },
-            { "NearClippingPlaneAdjuster.dll", "NearClipPlaneAdj" },
-            { "ParticleAndBoneLimiterSettings", "Particle and DynBone limiter settings UI" },
             { "Mute Blink Be Gone", "MuteBlinkBeGone" },
             { "CoreLimiter", "Core Limiter" },
-            { "MultiplayerDynamicBones", "Multiplayer Dynamic Bones" },
-            { "Game Priority Changer", "GamePriority" },
             { "RuntimeGraphicsSettings", "Runtime Graphics Settings" },
-            { "Advanced Invites", "AdvancedInvites" },
-            { "NoSteamAtAll", "No Steam. At all." },
-            { "RankVolumeControl", "Rank Volume Control" },
             { "VRC Video Library", "VRCVideoLibrary" },
-            { "Input System", "InputSystem" },
-            { "Toggle Post Processing", "TogglePostProcessing" },
-            { "Toggle Mic Icon", "ToggleMicIcon" },
-            { "VRCThumbParams", "ThumbParams" },
-            { "BTKSANameplateFix", "BTKSANameplateMod" },
             { "Extra Cameras", "ITR's Melon Cameras" },
             { "OldLoadingScreen", "BetterLoadingScreen" },
-            { "Player Rotater", "Player Rotater (Desktop Only)" },
-            { "PlayspaceMover", "OculusPlayspaceMover" },
-            { "UserInfoExtension" , "UserInfoExtensions" },
             { "EyeTrack" , "VRCEyeTracking" },
+
+            { "Input System", "InputSystem" }, // Unreleased?
+
         };
 
         private static float postUpdateDisplayDuration = 3f;
@@ -153,6 +137,12 @@ namespace VRCModUpdater.Core
                 if (versionDetails.ApprovalStatus != 1)
                     continue;
 
+                // Aliases
+                foreach (string alias in mod.aliases)
+                    if (alias != versionDetails.name)
+                        oldToNewModNames[alias] = versionDetails.name;
+
+                // Add to known mods
                 remoteMods.Add(versionDetails.name, (versionDetails.modversion, versionDetails.downloadlink));
             }
 
