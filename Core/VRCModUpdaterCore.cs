@@ -38,7 +38,7 @@ namespace VRCModUpdater.Core
             { "Input System", "InputSystem" },
             { "Toggle Post Processing", "TogglePostProcessing" },
             { "Toggle Mic Icon", "ToggleMicIcon" },
-            { "ThumbParams", "VRCThumbParams" },
+            { "VRCThumbParams", "ThumbParams" },
         };
 
         private static float postUpdateDisplayDuration = 3f;
