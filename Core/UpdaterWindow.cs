@@ -3,10 +3,12 @@ using Microsoft.Win32;
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using VRCModUpdater.Core.Externs;
 using VRCModUpdater.Loader;
 using Windef;
+using WinGDI;
 using Winuser;
 
 namespace VRCModUpdater.Core
@@ -14,6 +16,7 @@ namespace VRCModUpdater.Core
     class UpdaterWindow
     {
         private static bool lightMode = true;
+        internal static bool lemonMode = false;
 
         internal static IntPtr hWindow;
         public static bool IsOpen { get; private set; }
@@ -21,10 +24,14 @@ namespace VRCModUpdater.Core
 
         private static IntPtr hBackgroudBrush;
         private static IntPtr hHardBackgroudBrush;
-        private static IntPtr hMelonredBrush;
-        private static IntPtr hMelongreenBrush;
+        private static IntPtr hProgressbarBrush;
 
+        private static int backgroundColor;
         private static int foregroundColor;
+
+        private static IntPtr hTextFont;
+        private static IntPtr hTitleFont;
+        private static IntPtr hProgressbarFont;
 
         public static void CreateWindow()
         {
@@ -34,7 +41,7 @@ namespace VRCModUpdater.Core
             MelonLogger.Msg("Starting window creation");
 
             CheckLightTheme();
-
+            CheckLemonTheme();
 
             IntPtr hInstance = Process.GetCurrentProcess().Handle;
             string szClassName = "VRCModUpdaterWinClass";
@@ -46,23 +53,17 @@ namespace VRCModUpdater.Core
             wc.hInstance = hInstance;
             wc.lpszClassName = szClassName;
 
-            //wc.style = ClassStyles.HorizontalRedraw | ClassStyles.VerticalRedraw;
-
-            if (lightMode)
-                hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(255, 255, 255));
+            if (lemonMode)
+                //backgroundColor = GDI.RGB(255, 242, 0);
+                backgroundColor = GDI.RGB(255, 236, 0);
+            else if (lightMode)
+                backgroundColor = GDI.RGB(255, 255, 255);
             else
-                hBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(42, 42, 46));
+                backgroundColor = GDI.RGB(42, 42, 46);
+
+            hBackgroudBrush = GDI.CreateSolidBrush(backgroundColor);
 
             wc.hbrBackground = hBackgroudBrush;
-            /*
-            wc.cbClsExtra = 0;
-            wc.cbWndExtra = 0;
-            wc.hIcon = Win32.LoadIcon(IntPtr.Zero, new IntPtr((int)SystemIcons.IDI_APPLICATION));
-            wc.hCursor = Win32.LoadCursor(IntPtr.Zero, (int)IdcStandardCursors.IDC_ARROW);
-            wc.hbrBackground = Win32.GetStockObject(StockObjects.WHITE_BRUSH);
-            wc.lpszMenuName = null;
-            wc.lpszClassName = szAppName;
-            */
 
             MelonLogger.Msg("Registering window class");
             ushort regResult = User32.RegisterClass(ref wc);
@@ -82,7 +83,7 @@ namespace VRCModUpdater.Core
                 WindowStyles.WS_POPUPWINDOW,        // Window style
 
                 // Size and position
-                100, 100, 600, 300,
+                100, 100, 600, 250,
 
                 IntPtr.Zero,    // Parent window
                 IntPtr.Zero,    // Menu
@@ -133,27 +134,51 @@ namespace VRCModUpdater.Core
             MelonLogger.Msg("Using light theme: " + lightMode);
         }
 
-        private static IntPtr HandleWindowEvent(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+        private static void CheckLemonTheme()
         {
-            switch ((WindowMessage)msg)
+            lemonMode = Environment.GetCommandLineArgs().Contains("--lemonloader");
+        }
+
+        private static IntPtr HandleWindowEvent(IntPtr hWnd, WindowMessage msg, IntPtr wParam, IntPtr lParam)
+        {
+            switch (msg)
             {
                 case WindowMessage.CREATE:
                     
-                    if (lightMode)
+                    if (lemonMode)
+                    {
+                        hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(244, 220, 20));
+                        hProgressbarBrush = GDI.CreateSolidBrush(GDI.RGB(182, 255, 100));
+
+                        //foregroundColor = GDI.RGB(98, 247, 124);
+                        foregroundColor = GDI.RGB(86, 223, 13);
+                    }
+                    else if (lightMode)
                     {
                         hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(224, 224, 224));
+                        hProgressbarBrush = GDI.CreateSolidBrush(GDI.RGB(120, 248, 99));
 
                         foregroundColor = GDI.RGB(0, 0, 0);
                     }
                     else
                     {
                         hHardBackgroudBrush = GDI.CreateSolidBrush(GDI.RGB(54, 57, 63));
+                        hProgressbarBrush = GDI.CreateSolidBrush(GDI.RGB(255, 59, 106));
 
                         foregroundColor = GDI.RGB(220, 221, 222);
                     }
 
-                    hMelonredBrush = GDI.CreateSolidBrush(GDI.RGB(255, 59, 106));
-                    hMelongreenBrush = GDI.CreateSolidBrush(GDI.RGB(120, 248, 99));
+                    hTextFont = GDI.CreateFont(14, 0, 0, 0,
+                        FontWeight.Medium, 0, 0, 0,
+                        FontLanguageCharSet.Default, FontPrecision.Outline, FontClipPrecision.Default, FontQuality.Cleartype, FontPitch.Variable, "Segoe UI");
+
+                    hTitleFont = GDI.CreateFont(26, 0, 0, 0,
+                        FontWeight.Medium, 0, 0, 0,
+                        FontLanguageCharSet.Default, FontPrecision.Outline, FontClipPrecision.Default, FontQuality.Cleartype, FontPitch.Variable, "Consolas");
+
+                    hProgressbarFont = GDI.CreateFont(16, 0, 0, 0,
+                        FontWeight.Medium, 0, 0, 0,
+                        FontLanguageCharSet.Default, FontPrecision.Outline, FontClipPrecision.Default, FontQuality.Cleartype, FontPitch.Variable, "Segoe UI");
 
                     return IntPtr.Zero;
 
@@ -163,8 +188,11 @@ namespace VRCModUpdater.Core
                     GDI.DeleteObject(hBackgroudBrush);
                     GDI.DeleteObject(hHardBackgroudBrush);
 
-                    GDI.DeleteObject(hMelonredBrush);
-                    GDI.DeleteObject(hMelongreenBrush);
+                    GDI.DeleteObject(hProgressbarBrush);
+
+                    GDI.DeleteObject(hTextFont);
+                    GDI.DeleteObject(hTitleFont);
+                    GDI.DeleteObject(hProgressbarFont);
 
                     IsOpen = false;
 
@@ -184,23 +212,27 @@ namespace VRCModUpdater.Core
 
                     // Begin paint
                     IntPtr hdc = User32.BeginPaint(hWnd, out ps);
-                    GDI.SetBkMode(hdc, BackgroundMode.TRANSPARENT);
+                    GDI.SetBkColor(hdc, backgroundColor);
                     GDI.SetTextColor(hdc, foregroundColor);
-
-                    // Background
-                    //User32.FillRect(hdc, ref ps.rcPaint, hBackgroudBrush);
+                    GDI.SelectObject(hdc, hTextFont);
 
                     User32.GetClientRect(hWnd, out rect);
 
+                    // Progress bars
 
+                    GDI.SetBkMode(hdc, BackgroundMode.TRANSPARENT);
+                    GDI.SelectObject(hdc, hProgressbarFont);
                     DrawProgressBar(hdc, VRCModUpdaterCore.progressTotal, VRCModUpdaterCore.currentStatus, 40, rect.Bottom - 100, rect.Right - 40, rect.Bottom - 70);
                     DrawProgressBar(hdc, VRCModUpdaterCore.progressDownload, null, 40, rect.Bottom - 60, rect.Right - 40, rect.Bottom - 30);
 
                     // Text
-                    Rect titleRect = new Rect(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
+                    GDI.SetBkMode(hdc, BackgroundMode.OPAQUE);
+                    Rect titleRect = new Rect(ps.rcPaint.Left + 5, ps.rcPaint.Top + 5, ps.rcPaint.Right - 5, ps.rcPaint.Top + 125 - 5);
+                    GDI.SelectObject(hdc, hTitleFont);
                     User32.DrawText(hdc, "VRCModUpdater", -1, ref titleRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
 
-                    User32.DrawText(hdc, $"Loader v{VRCModUpdaterPlugin.VERSION}\nCore v{VRCModUpdaterPlugin.VERSION}", -1, ref titleRect, DrawText.LEFT | DrawText.TOP);
+                    GDI.SelectObject(hdc, hTextFont);
+                    User32.DrawText(hdc, $"Loader v{VRCModUpdaterPlugin.VERSION}\nCore v{VRCModUpdaterCore.VERSION}", -1, ref titleRect, DrawText.LEFT | DrawText.TOP);
                     User32.DrawText(hdc, $"MelonLoader {BuildInfo.Version}\nVRChat {UnityEngine.Application.version}", -1, ref titleRect, DrawText.RIGHT | DrawText.TOP);
 
                     // End paint
@@ -209,7 +241,7 @@ namespace VRCModUpdater.Core
                     return IntPtr.Zero;
             }
 
-            return User32.DefWindowProc(hWnd, (WindowMessage)msg, wParam, lParam);
+            return User32.DefWindowProc(hWnd, msg, wParam, lParam);
         }
 
         private static void DrawProgressBar(IntPtr hdc, int progress, string text, int left, int top, int right, int bottom)
@@ -222,7 +254,7 @@ namespace VRCModUpdater.Core
             if (progressPosition != left)
             {
                 Rect innerRectLeft = new Rect(left, top, progressPosition, bottom);
-                User32.FillRect(hdc, ref innerRectLeft, lightMode ? hMelongreenBrush : hMelonredBrush);
+                User32.FillRect(hdc, ref innerRectLeft, hProgressbarBrush);
             }
 
             User32.DrawText(hdc, text ?? (progress + "%"), -1, ref outterRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
