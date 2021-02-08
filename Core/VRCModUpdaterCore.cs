@@ -39,6 +39,13 @@ namespace VRCModUpdater.Core
             { "Toggle Post Processing", "TogglePostProcessing" },
             { "Toggle Mic Icon", "ToggleMicIcon" },
             { "VRCThumbParams", "ThumbParams" },
+            { "BTKSANameplateFix", "BTKSANameplateMod" },
+            { "Extra Cameras", "ITR's Melon Cameras" },
+            { "OldLoadingScreen", "BetterLoadingScreen" },
+            { "Player Rotater", "Player Rotater (Desktop Only)" },
+            { "PlayspaceMover", "OculusPlayspaceMover" },
+            { "UserInfoExtension" , "UserInfoExtensions" },
+            { "EyeTrack" , "VRCEyeTracking" },
         };
 
         private static float postUpdateDisplayDuration = 3f;
