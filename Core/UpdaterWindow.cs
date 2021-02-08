@@ -191,7 +191,7 @@ namespace VRCModUpdater.Core
 
                     // Text
                     Rect titleRect = new Rect(ps.rcPaint.Left, ps.rcPaint.Top, ps.rcPaint.Right, ps.rcPaint.Top + 100);
-                    User32.DrawText(hdc, "VRCModUpdater v1.0.0", -1, ref titleRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
+                    User32.DrawText(hdc, "VRCModUpdater v" + VRCModUpdaterCore.VERSION, -1, ref titleRect, DrawText.SINGLELINE | DrawText.CENTER | DrawText.VCENTER);
 
                     // End paint
                     User32.EndPaint(hWnd, ref ps);

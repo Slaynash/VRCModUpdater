@@ -82,6 +82,8 @@
     <Compile Include="API\APIModVersion.cs" />
     <Compile Include="Externs\Kernel32.cs" />
     <Compile Include="Externs\WinMM.cs" />
+    <Compile Include="FailedUpdateInfo.cs" />
+    <Compile Include="FailedUpdateReason.cs" />
     <Compile Include="ModDetail.cs" />
     <Compile Include="UpdaterWindow.cs" />
     <Compile Include="Utils\CppUtils.cs" />
