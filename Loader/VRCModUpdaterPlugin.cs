@@ -93,7 +93,7 @@ namespace VRCModUpdater.Loader
 
             JObject obj = JsonConvert.DeserializeObject(githubResponse) as JObject;
 
-            return obj.GetValue("tag_string")?.ToString();
+            return obj.GetValue("tag_name")?.ToString();
         }
 
         private void UpdateCore(string version)
