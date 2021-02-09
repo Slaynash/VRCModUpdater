@@ -42,7 +42,7 @@ namespace VRCModUpdater.Loader
                 TryStartCore();
                 return;
             }
-            MelonLogger.Error("Latest VRCModUpdater.Core version: " + latestVersion);
+            MelonLogger.Msg("Latest VRCModUpdater.Core version: " + latestVersion);
 
             string assemblyVersion = null;
             if (File.Exists(targetFilePath))
@@ -51,10 +51,10 @@ namespace VRCModUpdater.Loader
                 {
                     using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(targetFilePath, new ReaderParameters { ReadWrite = true }))
                     {
-                        CustomAttribute melonInfoAttribute = assembly.CustomAttributes.First(a => a.AttributeType.Name == "AssemblyVersionAttribute");
-                        assemblyVersion = melonInfoAttribute.ConstructorArguments[1].Value as string;
+                        CustomAttribute melonInfoAttribute = assembly.CustomAttributes.First(a => a.AttributeType.Name == "AssemblyFileVersionAttribute");
+                        assemblyVersion = melonInfoAttribute.ConstructorArguments[0].Value as string;
                     }
-                    MelonLogger.Error("Installed VRCModUpdater.Core version: " + assemblyVersion);
+                    MelonLogger.Msg("Installed VRCModUpdater.Core version: " + assemblyVersion);
                 }
                 catch (Exception e)
                 {
