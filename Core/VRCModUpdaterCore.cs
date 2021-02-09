@@ -17,20 +17,11 @@ namespace VRCModUpdater.Core
 {
     public static class VRCModUpdaterCore
     {
-        public const string VERSION = "1.0.0";
+        public const string VERSION = "1.0.1";
 
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
-            { "Mute Blink Be Gone", "MuteBlinkBeGone" },
-            { "CoreLimiter", "Core Limiter" },
-            { "RuntimeGraphicsSettings", "Runtime Graphics Settings" },
-            { "VRC Video Library", "VRCVideoLibrary" },
-            { "Extra Cameras", "ITR's Melon Cameras" },
-            { "OldLoadingScreen", "BetterLoadingScreen" },
-            { "EyeTrack" , "VRCEyeTracking" },
-
-            { "Input System", "InputSystem" }, // Unreleased?
-
+            // Used in case something is missing on Ruby's API
         };
 
         private static float postUpdateDisplayDuration = 3f;
@@ -129,7 +120,7 @@ namespace VRCModUpdater.Core
         {
             string apiResponse;
             using (var client = new WebClient())
-                apiResponse = client.DownloadString("http://client.ruby-core.com/api/mods.json");
+                apiResponse = client.DownloadString("https://ruby-core.com/api/mods.json");
 
             APIMod[] apiMods = JsonConvert.DeserializeObject<APIMod[]>(apiResponse);
 
