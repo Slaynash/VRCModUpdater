@@ -116,7 +116,7 @@ namespace VRCModUpdater.Core
             DownloadAndUpdateMods();
 
             if (toUpdateCount == 0)
-                currentStatus = "Every mods are already up to date !";
+                currentStatus = "All installed mods are already up to date !";
             else if (failedUpdates.Count > 0)
                 currentStatus = $"{failedUpdates.Count} mods failed to update ({toUpdateCount - failedUpdates.Count}/{toUpdateCount} succeeded)";
             else
