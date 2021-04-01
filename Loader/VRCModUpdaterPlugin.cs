@@ -12,7 +12,7 @@ namespace VRCModUpdater.Loader
 {
     public class VRCModUpdaterPlugin : MelonPlugin
     {
-        public const string VERSION = "1.0.1";
+        public const string VERSION = "1.0.2";
 
         string targetDirectoryPath  = Path.Combine(MelonHandler.ModsDirectory, "..", "UserData");
         string targetFilePath       = Path.Combine(MelonHandler.ModsDirectory, "..", "UserData", "VRCModUpdater.Core.dll");
