@@ -17,7 +17,7 @@ namespace VRCModUpdater.Core
 {
     public static class VRCModUpdaterCore
     {
-        public const string VERSION = "1.0.2";
+        public const string VERSION = "1.0.3";
 
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
@@ -276,8 +276,9 @@ namespace VRCModUpdater.Core
                                 MelonLogger.Error("Failed to update " + mod.name + ":\n" + e.Error);
                                 errored = true;
                                 failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.DownloadError, e.ToString()));
-                                downloadedFileData = e.Result;
                             }
+                            else
+                                downloadedFileData = e.Result;
 
                             progressDownload = 100;
                             downloading = false;
