@@ -276,11 +276,11 @@ namespace VRCModUpdater.Core
                                 MelonLogger.Error("Failed to update " + mod.name + ":\n" + e.Error);
                                 errored = true;
                                 failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.DownloadError, e.ToString()));
+                                downloadedFileData = e.Result;
                             }
 
                             progressDownload = 100;
                             downloading = false;
-                            downloadedFileData = e.Result;
                         };
                         client.DownloadProgressChanged += (sender, e) =>
                         {

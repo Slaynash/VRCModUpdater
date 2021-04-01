@@ -136,7 +136,7 @@ namespace VRCModUpdater.Core
 
         private static void CheckLemonTheme()
         {
-            lemonMode = Environment.GetCommandLineArgs().Contains("--lemonloader");
+            lemonMode = Environment.GetCommandLineArgs().Contains("--lemonloader") || (DateTime.Now.Day == 01 && DateTime.Now.Month == 04);
         }
 
         private static IntPtr HandleWindowEvent(IntPtr hWnd, WindowMessage msg, IntPtr wParam, IntPtr lParam)
