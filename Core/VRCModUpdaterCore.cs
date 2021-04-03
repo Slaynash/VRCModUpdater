@@ -17,7 +17,7 @@ namespace VRCModUpdater.Core
 {
     public static class VRCModUpdaterCore
     {
-        public const string VERSION = "1.0.3";
+        public const string VERSION = "1.0.4";
 
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
@@ -120,7 +120,10 @@ namespace VRCModUpdater.Core
         {
             string apiResponse;
             using (var client = new WebClient())
-                apiResponse = client.DownloadString("https://ruby-core.com/api/mods.json");
+            {
+                client.Headers["User-Agent"] = "VRCModUpdater";
+                apiResponse = client.DownloadString("https://api.vrcmg.com/v0/mods.json");
+            }
 
             APIMod[] apiMods = JsonConvert.DeserializeObject<APIMod[]>(apiResponse);
 
