@@ -133,7 +133,7 @@ namespace VRCModUpdater.Core
                 if (lightTheme != null)
                     lightMode = (int)lightTheme == 1;
             }
-            catch (System.NullReferenceException ex)
+            catch (Exception ex)
             {
                 MelonLogger.Warning("Unable to get system theme, defaulting to dark");
                 lightMode = false;
