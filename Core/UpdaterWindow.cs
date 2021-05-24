@@ -126,7 +126,7 @@ namespace VRCModUpdater.Core
         private static void CheckLightTheme()
         {
             RegistryKey personalizeKey = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
-            object lightTheme = personalizeKey.GetValue("AppsUseLightTheme");
+            object lightTheme = personalizeKey?.GetValue("AppsUseLightTheme");
 
             if (lightTheme != null)
                 lightMode = (int)lightTheme == 1;
