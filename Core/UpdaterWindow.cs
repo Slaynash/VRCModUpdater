@@ -126,10 +126,16 @@ namespace VRCModUpdater.Core
         private static void CheckLightTheme()
         {
             RegistryKey personalizeKey = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize");
-            object lightTheme = personalizeKey.GetValue("AppsUseLightTheme");
 
-            if (lightTheme != null)
-                lightMode = (int)lightTheme == 1;
+            if (personalizeKey != null)
+            {
+                object lightTheme = personalizeKey.GetValue("AppsUseLightTheme");
+
+                if (lightTheme != null)
+                    lightMode = (int)lightTheme == 1;
+            }
+            else
+                lightMode = true;
 
             MelonLogger.Msg("Using light theme: " + lightMode);
         }
