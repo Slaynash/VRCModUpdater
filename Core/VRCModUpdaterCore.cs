@@ -31,7 +31,6 @@ namespace VRCModUpdater.Core
         private static Dictionary<string, ModDetail> installedMods = new Dictionary<string, ModDetail>();
         private static Dictionary<string, ModDetail> brokenMods = new Dictionary<string, ModDetail>();
 
-
         public static string currentStatus = "", tmpCurrentStatus = "";
         public static int progressTotal = 0, progressDownload = 0;
         private static int tmpProgressTotal = 0, tmpProgressDownload = 0;
@@ -42,10 +41,13 @@ namespace VRCModUpdater.Core
 
         private static List<FailedUpdateInfo> failedUpdates = new List<FailedUpdateInfo>();
 
+        private static MelonPreferences_Entry<bool> toFromBroken;
+
         public static void Start()
         {
             var prefCategory = MelonPreferences.CreateCategory("VRCModUpdater");
             var diplayTimeEntry = prefCategory.CreateEntry("displaytime", postUpdateDisplayDuration, "Display time (seconds)");
+            toFromBroken = prefCategory.CreateEntry("toFromBroken", true, "Attempt to move mods to and from Broken mods folder based on status in Remote API");
             if (float.TryParse(diplayTimeEntry.GetValueAsString(), out float diplayTime))
                 postUpdateDisplayDuration = diplayTime;
 
@@ -132,7 +134,6 @@ namespace VRCModUpdater.Core
             APIMod[] apiMods = JsonConvert.DeserializeObject<APIMod[]>(apiResponse);
 
             remoteMods.Clear();
-
             int verifiedModsCount = 0;
 
             foreach (APIMod mod in apiMods)
@@ -148,9 +149,9 @@ namespace VRCModUpdater.Core
                         oldToNewModNames[alias] = versionDetails.name;
 
                 // Add to known mods
+                remoteMods.Add(versionDetails.name, new ModDetail(versionDetails.name, versionDetails.modversion, versionDetails.downloadlink, versionDetails.hash, versionDetails.ApprovalStatus));
                 if (versionDetails.ApprovalStatus == 1)
                     verifiedModsCount++;
-                remoteMods.Add(versionDetails.name, new ModDetail(versionDetails.name, versionDetails.modversion, versionDetails.downloadlink, versionDetails.hash, versionDetails.ApprovalStatus));
             }
 
             MelonLogger.Msg("API returned " + apiMods.Length + " mods, including " + verifiedModsCount + " verified mods");
@@ -164,7 +165,8 @@ namespace VRCModUpdater.Core
             {   //This is a kinda dirty way to do this
                 dict.Clear();
                 string basedirectory = !runOnce ? MelonHandler.ModsDirectory : MelonHandler.ModsDirectory + "/Broken";
-
+                if (!Directory.Exists(basedirectory))
+                    continue;
                 string[] dlltbl = Directory.GetFiles(basedirectory, "*.dll");
                 if (dlltbl.Length > 0)
                 {
@@ -276,7 +278,7 @@ namespace VRCModUpdater.Core
 
                     if(remoteMod.approvalStatus != 1)
                     {
-                        MelonLogger.Msg($"(Mod: {installedMod.Key}) Remote Approval Status: Broken/Other - {remoteMod.approvalStatus}");
+                        MelonLogger.Msg($"(Mod: {installedMod.Key}) Remote Approval Status is: Broken/Other - {remoteMod.approvalStatus}");
                         if (compareResult >= 0) // Don't move to broken if local version is higher than remote
                             toBroken.Add(new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath));
                         else
@@ -292,48 +294,51 @@ namespace VRCModUpdater.Core
 
             MelonLogger.Msg("Found " + toUpdate.Count + " outdated mods | " + toBroken.Count + " broken mods | " + toMods.Count + " fixed mods");
 
-            toModsCount = toMods.Count;
-            for (int i = 0; i < toModsCount; ++i)
+            if (toFromBroken.Value)
             {
-                ModDetail mod = toMods[i];
-                MelonLogger.Warning(mod.name + "Moving to Mods from Broken folder");
-                try
+                toModsCount = toMods.Count;
+                for (int i = 0; i < toModsCount; ++i)
                 {
-                    if (File.Exists(mod.filepath))
+                    ModDetail mod = toMods[i];
+                    MelonLogger.Warning(mod.name + " - Moving to Mods from Broken folder");
+                    try
                     {
-                        var newDir = Directory.GetParent(Path.GetDirectoryName(mod.filepath)) + "/" + Path.GetFileName(mod.filepath);       
-                        toUpdate.Add(new ModDetail(mod.name, mod.version, newDir, mod.downloadUrl, mod.hash));
-                        File.Delete(mod.filepath);
-                    }
-                }
-                catch (Exception e)
-                {
-                    MelonLogger.Error("Failed to updated fixed mod" + mod.filepath + ":\n" + e);
-                }
-            }
-
-            toBrokenCount = toBroken.Count;
-            for (int i = 0; i < toBrokenCount; ++i)
-            {
-                ModDetail mod = toBroken[i];
-                MelonLogger.Warning(mod.name + " - Moving to Broken folder");
-                try
-                {
-                    if (File.Exists(mod.filepath))
-                    {
-                        var newDir = Path.GetDirectoryName(mod.filepath) + "/Broken";
-                        if(!Directory.Exists(newDir))
-                            Directory.CreateDirectory(newDir);
-                        var newFilePath = newDir + "/" + Path.GetFileName(mod.filepath);
-                        if (!File.Exists(newFilePath))
-                            File.Move(mod.filepath, newFilePath);
-                        else
+                        if (File.Exists(mod.filepath))
+                        {
+                            var newDir = Directory.GetParent(Path.GetDirectoryName(mod.filepath)) + "/" + Path.GetFileName(mod.filepath);
+                            toUpdate.Add(new ModDetail(mod.name, mod.version, newDir, mod.downloadUrl, mod.hash));
                             File.Delete(mod.filepath);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        MelonLogger.Error("Failed to updated fixed mod" + mod.filepath + ":\n" + e);
                     }
                 }
-                catch (Exception e)
+
+                toBrokenCount = toBroken.Count;
+                for (int i = 0; i < toBrokenCount; ++i)
                 {
-                    MelonLogger.Error("Failed to move mod to broken folder" + mod.filepath + ":\n" + e);
+                    ModDetail mod = toBroken[i];
+                    MelonLogger.Warning(mod.name + " - Moving to Broken folder");
+                    try
+                    {
+                        if (File.Exists(mod.filepath))
+                        {
+                            var newDir = Path.GetDirectoryName(mod.filepath) + "/Broken";
+                            if (!Directory.Exists(newDir))
+                                Directory.CreateDirectory(newDir);
+                            var newFilePath = newDir + "/" + Path.GetFileName(mod.filepath);
+                            if (!File.Exists(newFilePath))
+                                File.Move(mod.filepath, newFilePath);
+                            else
+                                File.Delete(mod.filepath);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        MelonLogger.Error("Failed to move mod to broken folder" + mod.filepath + ":\n" + e);
+                    }
                 }
             }
 
