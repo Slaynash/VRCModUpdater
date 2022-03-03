@@ -7,6 +7,7 @@
         public string filepath;
         public string downloadUrl;
         public string hash;
+        public int approvalStatus;
 
         public ModDetail(string name, string version, string filepath)
         {
@@ -30,6 +31,15 @@
             this.filepath = filepath;
             this.downloadUrl = downloadUrl;
             this.hash = hash;
+        }
+
+        public ModDetail(string name, string version, string downloadUrl, string hash, int approvalStatus)
+        {
+            this.name = name;
+            this.version = version;
+            this.downloadUrl = downloadUrl;
+            this.hash = hash;
+            this.approvalStatus = approvalStatus;
         }
     }
 }
