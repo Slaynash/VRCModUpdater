@@ -9,6 +9,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
 using VRCModUpdater.API;
+using VRCModUpdater.Core.API;
 using VRCModUpdater.Core.Externs;
 using VRCModUpdater.Core.Utils;
 using Winuser;
@@ -17,7 +18,7 @@ namespace VRCModUpdater.Core
 {
     public static class VRCModUpdaterCore
     {
-        public const string VERSION = "1.0.5";
+        public const string VERSION = "1.0.6";
 
         private static readonly Dictionary<string, string> oldToNewModNames = new Dictionary<string, string>()
         {
@@ -127,8 +128,8 @@ namespace VRCModUpdater.Core
             string apiResponse;
             using (var client = new WebClient())
             {
-                client.Headers["User-Agent"] = "VRCModUpdater";
-                apiResponse = client.DownloadString("https://api.vrcmg.com/v0/mods.json");
+                client.Headers.Add("User-Agent", APIConstants.USER_AGENT);
+                apiResponse = client.DownloadString(APIConstants.MODS_ENDPOINT);
             }
 
             APIMod[] apiMods = JsonConvert.DeserializeObject<APIMod[]>(apiResponse);
@@ -149,8 +150,8 @@ namespace VRCModUpdater.Core
                         oldToNewModNames[alias] = versionDetails.name;
 
                 // Add to known mods
-                remoteMods.Add(versionDetails.name, new ModDetail(versionDetails.name, versionDetails.modversion, versionDetails.downloadlink, versionDetails.hash, versionDetails.ApprovalStatus));
-                if (versionDetails.ApprovalStatus == 1)
+                remoteMods.Add(versionDetails.name, new ModDetail(versionDetails.name, versionDetails.modVersion, versionDetails.downloadLink, versionDetails.hash, versionDetails.approvalStatus));
+                if (versionDetails.approvalStatus == 1)
                     verifiedModsCount++;
             }
 
@@ -356,6 +357,7 @@ namespace VRCModUpdater.Core
                     bool errored = false;
                     using (var client = new WebClient())
                     {
+                        client.Headers.Add("User-Agent", APIConstants.USER_AGENT);
                         bool downloading = true;
                         byte[] downloadedFileData = null;
                         client.DownloadDataCompleted += (sender, e) =>
