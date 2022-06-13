@@ -2,10 +2,10 @@
 {
     public class APIModVersion
     {
-        public int ApprovalStatus;
+        public int approvalStatus;
         public string name;
-        public string modversion;
-        public string downloadlink;
+        public string modVersion;
+        public string downloadLink;
         public string hash;
     }
 }
