@@ -1,4 +1,4 @@
-﻿using MelonLoader;
+using MelonLoader;
 using Mono.Cecil;
 using Newtonsoft.Json;
 using System;
@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Reflection;
 using VRCModUpdater.API;
 using VRCModUpdater.Core.API;
 using VRCModUpdater.Core.Externs;
@@ -37,18 +38,19 @@ namespace VRCModUpdater.Core
         private static int tmpProgressTotal = 0, tmpProgressDownload = 0;
 
         private static int toUpdateCount = 0;
-        private static int toBrokenCount = 0;
-        private static int toModsCount = 0;
 
         private static List<FailedUpdateInfo> failedUpdates = new List<FailedUpdateInfo>();
 
-        private static MelonPreferences_Entry<bool> toFromBroken;
+        private static MelonPreferences_Entry<bool> toFromBroken, resolveDependencies, resolveOptionalDependencies;
 
         public static void Start()
         {
             var prefCategory = MelonPreferences.CreateCategory("VRCModUpdater");
             var diplayTimeEntry = prefCategory.CreateEntry("displaytime", postUpdateDisplayDuration, "Display time (seconds)");
             toFromBroken = prefCategory.CreateEntry("toFromBroken", true, "Attempt to move mods to and from Broken mods folder based on status in Remote API");
+            resolveDependencies = prefCategory.CreateEntry("resolveDependencies", true, "Attempt to download missing required dependencies");
+            resolveOptionalDependencies = prefCategory.CreateEntry("resolveOptionalDependencies", false, "Also attempt to download missing OPTIONAL dependencies");
+
             if (float.TryParse(diplayTimeEntry.GetValueAsString(), out float diplayTime))
                 postUpdateDisplayDuration = diplayTime;
 
@@ -160,8 +162,10 @@ namespace VRCModUpdater.Core
 
         private static void ScanModFolder()
         {
-            var list = new [] { installedMods, brokenMods };
+            var list = new[] { installedMods, brokenMods };
             var runOnce = false;
+            var allDepList = new List<string>();
+            var allOptDepList = new List<string>();
             foreach (var dict in list)
             {   //This is a kinda dirty way to do this
                 dict.Clear();
@@ -184,6 +188,8 @@ namespace VRCModUpdater.Core
                         {
                             string modName;
                             string modVersion;
+                            string[] optDependencies = new string[0];
+
                             using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(filename, new ReaderParameters { ReadWrite = true }))
                             {
 
@@ -195,6 +201,36 @@ namespace VRCModUpdater.Core
 
                                 modName = melonInfoAttribute.ConstructorArguments[1].Value as string;
                                 modVersion = melonInfoAttribute.ConstructorArguments[2].Value as string;
+
+                            }
+
+                            List<string> depList = new List<string>();
+                            if (resolveDependencies.Value)
+                            {
+                                Assembly modAssembly = Assembly.Load(File.ReadAllBytes(filename)); //Only part about all of this I am suss about
+
+                                MelonOptionalDependenciesAttribute optionals = (MelonOptionalDependenciesAttribute)Attribute.GetCustomAttribute(modAssembly, typeof(MelonOptionalDependenciesAttribute));
+
+                                foreach (AssemblyName dependency in modAssembly.GetReferencedAssemblies())
+                                {
+                                    var depName = GetNewModName(dependency.Name);
+                                    if (remoteMods.ContainsKey(depName))
+                                    {//If dep is in RemoteAPI
+                                        if (!optionals?.AssemblyNames?.Contains(dependency.Name) ?? true) //Sum up all the deps
+                                        {
+                                            if (!allDepList.Contains(depName)) allDepList.Add(depName);
+                                        }
+                                        else
+                                        {
+                                            if (!allDepList.Contains(depName) && !allOptDepList.Contains(depName)) allOptDepList.Add(depName);
+                                        }
+                                        
+                                        if (resolveOptionalDependencies.Value || (!optionals?.AssemblyNames?.Contains(dependency.Name) ?? true))
+                                        {//If we want to add optional deps OR it's not in the optional dep list)
+                                            depList.Add(depName);
+                                        }
+                                    }
+                                }
                             }
 
                             modName = GetNewModName(modName); // Backward mod compatibility
@@ -210,24 +246,41 @@ namespace VRCModUpdater.Core
                                 {
                                     File.Delete(installedModDetail.filepath); // Delete duplicated mods
                                     MelonLogger.Msg("Deleted duplicated mod " + modName);
-                                    dict[modName] = new ModDetail(modName, modVersion, filename);
+                                    dict[modName] = new ModDetail(modName, modVersion, filename, depList.ToArray(), optDependencies);
                                 }
 
                                 continue;
                             }
 
-                            dict.Add(modName, new ModDetail(modName, modVersion, filename));
+                            dict.Add(modName, new ModDetail(modName, modVersion, filename, depList.ToArray(), optDependencies));
                         }
-                        catch (Exception)
+                        catch (Exception ex)
                         {
-                            MelonLogger.Msg("Failed to read assembly " + filename);
+                            MelonLogger.Msg("Failed to read assembly " + filename + "\n" + ex.ToString());
                         }
                     }
                 }
-                MelonLogger.Msg("Found " + dict.Count + " unique non-dev mods " + $"{(!runOnce ? "installed" : "in Broken folder")}");
+                MelonLogger.Msg(ConsoleColor.DarkCyan, "Found " + dict.Count + " unique non-dev mods " + $"{(!runOnce ? "installed" : "in Broken folder")}");
                 runOnce = true;
             }
-        }  
+            
+            if (resolveDependencies.Value)
+            { //Just some stats
+                string depString, optDepString;
+                if (allDepList.Count > 0)
+                    depString = string.Join(", ", allDepList);
+                else
+                    depString = "N/A";
+                if (allOptDepList.Count > 0)
+                    optDepString = string.Join(", ", allOptDepList);
+                else
+                    optDepString = "N/A";
+
+                MelonLogger.Msg(ConsoleColor.DarkCyan, $"Found {allDepList.Count} required dependencies: '{depString}' " +
+                    $"and {allOptDepList.Count} optional dependencies: '{optDepString}' used by the mods in your mod folders.\n" +
+                    $"{(resolveOptionalDependencies.Value ? "Both Required and Optional dependencies" : "Only Required dependencies")} will be downloaded, you can change this in Mod Settings");
+            }
+        }
 
         private static string GetNewModName(string currentName)
         {
@@ -245,9 +298,10 @@ namespace VRCModUpdater.Core
 
         private static void DownloadAndUpdateMods()
         {
-            List<ModDetail> toMods = new List<ModDetail>();
-            List<ModDetail> toBroken = new List<ModDetail>();
-            List<ModDetail> toUpdate = new List<ModDetail>();
+            Dictionary<string, ModDetail> toMods = new Dictionary<string, ModDetail>();
+            Dictionary<string, ModDetail> toBroken = new Dictionary<string, ModDetail>();
+            Dictionary<string, ModDetail> toUpdate = new Dictionary<string, ModDetail>();
+            Dictionary<string, ModDetail> checkDeps = new Dictionary<string, ModDetail>();
 
             // Check for broken mods with updates
             foreach (KeyValuePair<string, ModDetail> brokenMod in brokenMods)
@@ -260,10 +314,13 @@ namespace VRCModUpdater.Core
                     VersionUtils.VersionData brokenModVersion = VersionUtils.GetVersion(brokenMod.Value.version);
                     VersionUtils.VersionData remoteModVersion = VersionUtils.GetVersion(remoteMod.version);
                     int compareResult = VersionUtils.CompareVersion(remoteModVersion, brokenModVersion);
-                    
+
                     MelonLogger.Msg("(Broken Mod: " + remoteMod.name + ") version compare between [remote] " + remoteMod.version + " and [local] " + brokenMod.Value.version + ": " + compareResult);
                     if (compareResult > 0) // Don't move from broken unless new version > old
-                        toMods.Add(new ModDetail(brokenMod.Key, brokenMod.Value.version, brokenMod.Value.filepath, remoteMod.downloadUrl, remoteMod.hash));
+                    {
+                        toMods.Add(brokenMod.Key, new ModDetail(brokenMod.Key, brokenMod.Value.version, brokenMod.Value.filepath, remoteMod.downloadUrl, remoteMod.hash));
+                        checkDeps.Add(brokenMod.Key, brokenMod.Value);
+                    }
                     continue;
                 }
             }
@@ -277,147 +334,169 @@ namespace VRCModUpdater.Core
                     VersionUtils.VersionData remoteModVersion = VersionUtils.GetVersion(remoteMod.version);
                     int compareResult = VersionUtils.CompareVersion(remoteModVersion, installedModVersion);
 
-                    if(remoteMod.approvalStatus != 1)
+                    if (remoteMod.approvalStatus != 1)
                     {
                         MelonLogger.Msg($"(Mod: {installedMod.Key}) Remote Approval Status is: Broken/Other - {remoteMod.approvalStatus}");
                         if (compareResult >= 0) // Don't move to broken if local version is higher than remote
-                            toBroken.Add(new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath));
+                            toBroken.Add(installedMod.Key, new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath));
                         else
                             MelonLogger.Msg($"Ignoring as local version is higer than remote. Remote: {remoteMod.version}, Local: {installedMod.Value.version}");
                         continue;
                     }
                     MelonLogger.Msg("(Mod: " + remoteMod.name + ") version compare between [remote] " + remoteMod.version + " and [local] " + installedMod.Value.version + ": " + compareResult);
                     if (compareResult > 0)
-                        toUpdate.Add(new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath, remoteMod.downloadUrl, remoteMod.hash));
+                        toUpdate.Add(installedMod.Key, new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath, remoteMod.downloadUrl, remoteMod.hash));
+                    checkDeps.Add(installedMod.Key, installedMod.Value);
                     continue;
                 }
             }
 
-            MelonLogger.Msg("Found " + toUpdate.Count + " outdated mods | " + toBroken.Count + " broken mods | " + toMods.Count + " fixed mods");
+            MelonLogger.Msg(ConsoleColor.DarkCyan, "Found " + toUpdate.Count + " outdated mods | " + toBroken.Count + " broken mods | " + toMods.Count + " fixed mods");
 
-            if (toFromBroken.Value)
+            if (resolveDependencies.Value)
             {
-                toModsCount = toMods.Count;
-                for (int i = 0; i < toModsCount; ++i)
-                {
-                    ModDetail mod = toMods[i];
-                    MelonLogger.Warning(mod.name + " - Moving to Mods from Broken folder");
-                    try
+                foreach (var modtoCheck in checkDeps)
+                {//Check all installed mods
+                    foreach (var dep in modtoCheck.Value.dependencies)
                     {
-                        if (File.Exists(mod.filepath))
-                        {
-                            var newDir = Directory.GetParent(Path.GetDirectoryName(mod.filepath)) + "/" + Path.GetFileName(mod.filepath);
-                            toUpdate.Add(new ModDetail(mod.name, mod.version, newDir, mod.downloadUrl, mod.hash));
-                            File.Delete(mod.filepath);
+                        if (!installedMods.ContainsKey(dep) && !toMods.ContainsKey(dep) && !toUpdate.ContainsKey(dep) && !brokenMods.ContainsKey(dep))
+                        {//If dep is not in Installed Mods, & it is not being added to Mods from Broken, & it isn't already in toUpdate, & it isn't in the broken mods folder
+                         //Dont want to install it twice... or more
+                            if (remoteMods.TryGetValue(dep, out ModDetail remoteDep))
+                            {
+                                if (remoteDep.approvalStatus != 1) //Dont add broken deps
+                                    continue; 
+                                var newFileName = remoteDep.downloadUrl.Split('/').Last();
+                                var newPath = "Mods/" + newFileName; 
+                                MelonLogger.Warning($"Adding Dependency '{newPath}' for Mod '{modtoCheck.Value.name}'");
+                                toUpdate.Add(remoteDep.name, new ModDetail(remoteDep.name, remoteDep.version, newPath, remoteDep.downloadUrl, remoteDep.hash));
+                            }
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        MelonLogger.Error("Failed to updated fixed mod" + mod.filepath + ":\n" + e);
-                    }
-                }
-
-                toBrokenCount = toBroken.Count;
-                for (int i = 0; i < toBrokenCount; ++i)
-                {
-                    ModDetail mod = toBroken[i];
-                    MelonLogger.Warning(mod.name + " - Moving to Broken folder");
-                    try
-                    {
-                        if (File.Exists(mod.filepath))
-                        {
-                            var newDir = Path.GetDirectoryName(mod.filepath) + "/Broken";
-                            if (!Directory.Exists(newDir))
-                                Directory.CreateDirectory(newDir);
-                            var newFilePath = newDir + "/" + Path.GetFileName(mod.filepath);
-                            if (!File.Exists(newFilePath))
-                                File.Move(mod.filepath, newFilePath);
-                            else
-                                File.Delete(mod.filepath);
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        MelonLogger.Error("Failed to move mod to broken folder" + mod.filepath + ":\n" + e);
                     }
                 }
             }
 
-            toUpdateCount = toUpdate.Count;
-            for (int i = 0; i < toUpdateCount; ++i)
+            if (toFromBroken.Value)
             {
-                ModDetail mod = toUpdate[i];
-
-                MelonLogger.Msg("Updating " + mod.name);
-                progressTotal = (int)(i / (double)toUpdateCount * 100);
-                currentStatus = $"Updating {mod.name} ({i + 1} / {toUpdateCount})...";
-
-                try
+                foreach (KeyValuePair<string, ModDetail> mod in toMods)
                 {
-                    bool errored = false;
-                    using (var client = new WebClient())
+                    MelonLogger.Warning(mod.Value.name + " - Moving to Mods from Broken folder");
+                    try
                     {
-                        client.Headers.Add("User-Agent", APIConstants.USER_AGENT);
-                        bool downloading = true;
-                        byte[] downloadedFileData = null;
-                        client.DownloadDataCompleted += (sender, e) =>
+                        if (File.Exists(mod.Value.filepath))
                         {
-                            if (e.Error != null)
-                            {
-                                MelonLogger.Error("Failed to update " + mod.name + ":\n" + e.Error);
-                                errored = true;
-                                failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.DownloadError, e.ToString()));
-                            }
-                            else
-                                downloadedFileData = e.Result;
+                            var newDir = Directory.GetParent(Path.GetDirectoryName(mod.Value.filepath)) + "/" + Path.GetFileName(mod.Value.filepath);
+                            toUpdate.Add(mod.Key, new ModDetail(mod.Key, mod.Value.version, newDir, mod.Value.downloadUrl, mod.Value.hash));
+                            File.Delete(mod.Value.filepath);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        MelonLogger.Error("Failed to updated fixed mod" + mod.Value.filepath + ":\n" + e);
+                    }
+                }
 
-                            progressDownload = 100;
-                            downloading = false;
-                        };
-                        client.DownloadProgressChanged += (sender, e) =>
+                foreach (KeyValuePair<string, ModDetail> mod in toBroken)
+                {
+                    {
+                        MelonLogger.Warning(mod.Value.name + " - Moving to Broken folder");
+                        try
                         {
-                            progressDownload = e.ProgressPercentage;
-                        };
-                        client.DownloadDataAsync(new Uri(mod.downloadUrl));
-
-                        while (downloading)
-                            Thread.Sleep(50);
-
-                        if (!errored)
+                            if (File.Exists(mod.Value.filepath))
+                            {
+                                var newDir = Path.GetDirectoryName(mod.Value.filepath) + "/Broken";
+                                if (!Directory.Exists(newDir))
+                                    Directory.CreateDirectory(newDir);
+                                var newFilePath = newDir + "/" + Path.GetFileName(mod.Value.filepath);
+                                if (!File.Exists(newFilePath))
+                                    File.Move(mod.Value.filepath, newFilePath);
+                                else
+                                    File.Delete(mod.Value.filepath);
+                            }
+                        }
+                        catch (Exception e)
                         {
-                            string downloadedHash = ComputeSha256Hash(downloadedFileData);
-                            MelonLogger.Msg("Downloaded file hash: " + downloadedHash);
-
-                            if (downloadedHash == mod.hash)
-                            {
-                                try
-                                {
-                                    File.WriteAllBytes(mod.filepath, downloadedFileData);
-                                }
-                                catch (Exception e)
-                                {
-                                    MelonLogger.Error("Failed to save " + mod.filepath + ":\n" + e);
-                                    failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.SaveError, e.ToString()));
-                                }
-
-                            }
-                            else
-                            {
-                                MelonLogger.Error("Downloaded file hash mismatches database hash!");
-                                failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.HashMismatch, $"Expected hash: {mod.hash}, Downloaded file hash: {downloadedHash}"));
-                            }
+                            MelonLogger.Error("Failed to move mod to broken folder" + mod.Value.filepath + ":\n" + e);
                         }
                     }
                 }
-                catch (Exception e)
-                {
-                    MelonLogger.Error("Failed to update " + mod.filepath + ":\n" + e);
-                    failedUpdates.Add(new FailedUpdateInfo(mod, FailedUpdateReason.Unknown, e.ToString()));
-                }
 
-                progressTotal = (int)((i + 1) / (double)toUpdateCount * 100);
-                MelonLogger.Msg($"Progress: {i + 1}/{toUpdateCount} -> {progressTotal}%");
-;            }
+                toUpdateCount = toUpdate.Count;
+                int i = 0;
+                foreach (KeyValuePair<string, ModDetail> mod in toUpdate)
+                {
+                    MelonLogger.Msg("Updating " + mod.Value.name);
+                    progressTotal = (int)(i / (double)toUpdateCount * 100);
+                    currentStatus = $"Updating {mod.Value.name} ({i + 1} / {toUpdateCount})...";
+
+                    try
+                    {
+                        bool errored = false;
+                        using (var client = new WebClient())
+                        {
+                            client.Headers.Add("User-Agent", APIConstants.USER_AGENT);
+                            bool downloading = true;
+                            byte[] downloadedFileData = null;
+                            client.DownloadDataCompleted += (sender, e) =>
+                            {
+                                if (e.Error != null)
+                                {
+                                    MelonLogger.Error("Failed to update " + mod.Value.name + ":\n" + e.Error);
+                                    errored = true;
+                                    failedUpdates.Add(new FailedUpdateInfo(mod.Value, FailedUpdateReason.DownloadError, e.ToString()));
+                                }
+                                else
+                                    downloadedFileData = e.Result;
+
+                                progressDownload = 100;
+                                downloading = false;
+                            };
+                            client.DownloadProgressChanged += (sender, e) =>
+                            {
+                                progressDownload = e.ProgressPercentage;
+                            };
+                            client.DownloadDataAsync(new Uri(mod.Value.downloadUrl));
+
+                            while (downloading)
+                                Thread.Sleep(50);
+
+                            if (!errored)
+                            {
+                                string downloadedHash = ComputeSha256Hash(downloadedFileData);
+                                MelonLogger.Msg("Downloaded file hash: " + downloadedHash);
+
+                                if (downloadedHash == mod.Value.hash)
+                                {
+                                    try
+                                    {
+                                        File.WriteAllBytes(mod.Value.filepath, downloadedFileData);
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        MelonLogger.Error("Failed to save " + mod.Value.filepath + ":\n" + e);
+                                        failedUpdates.Add(new FailedUpdateInfo(mod.Value, FailedUpdateReason.SaveError, e.ToString()));
+                                    }
+
+                                }
+                                else
+                                {
+                                    MelonLogger.Error("Downloaded file hash mismatches database hash!");
+                                    failedUpdates.Add(new FailedUpdateInfo(mod.Value, FailedUpdateReason.HashMismatch, $"Expected hash: {mod.Value.hash}, Downloaded file hash: {downloadedHash}"));
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        MelonLogger.Error("Failed to update " + mod.Value.filepath + ":\n" + e);
+                        failedUpdates.Add(new FailedUpdateInfo(mod.Value, FailedUpdateReason.Unknown, e.ToString()));
+                    }
+
+                    progressTotal = (int)((i + 1) / (double)toUpdateCount * 100);
+                    MelonLogger.Msg($"Progress: {i + 1}/{toUpdateCount} -> {progressTotal}%");
+                    i++;
+                }
+            }
         }
     }
 }
