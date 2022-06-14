@@ -46,7 +46,7 @@ namespace VRCModUpdater.Core.Utils
 
             MatchCollection matches = Regex.Matches(versionString, "\\d+");
             bool isValidSemver = Regex.IsMatch(versionString, "^v?[0-9][\\d.-_]*[^\\s]*$");
-            MelonLoader.MelonLogger.Msg($"SEMVER \"{versionString}\": {isValidSemver}");
+            //MelonLoader.MelonLogger.Msg($"SEMVER \"{versionString}\": {isValidSemver}");
 
             return new VersionData(matches, isValidSemver);
         }
