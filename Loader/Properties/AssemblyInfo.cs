@@ -35,3 +35,7 @@ using VRCModUpdater.Loader;
 
 [assembly: MelonInfo(typeof(VRCModUpdaterPlugin), "VRCModUpdater.Loader", VRCModUpdaterPlugin.VERSION, "Slaynash")]
 [assembly: MelonGame("VRChat", "VRChat")]
+
+// ModLoadSeparator runs before us and we need to be first, otherwise it tries loading mods that 
+// we may have moved to the Broken folder
+[assembly: MelonPriority(int.MinValue)]
