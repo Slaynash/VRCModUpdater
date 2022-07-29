@@ -1,5 +1,4 @@
-﻿using System;
-namespace VRCModUpdater.Core
+﻿namespace VRCModUpdater.Core
 {
     public class ModDetail
     {
@@ -11,10 +10,6 @@ namespace VRCModUpdater.Core
         public int approvalStatus;
         public string[] dependencies = new string[0];
         public string[] optDependencies = new string[0];
-        public DateTime lastMod;
-        public DateTime lastAccess;
-
-        ModDetail() { }
 
         public ModDetail(string name, string version, string filepath)
         {
@@ -30,17 +25,6 @@ namespace VRCModUpdater.Core
             this.filepath = filepath;
             this.dependencies = dependencies;
             this.optDependencies = optDependencies;
-        }
-
-        public ModDetail(string name, string version, string filepath, string[] dependencies, string[] optDependencies, DateTime lastMod, DateTime lastAccess)
-        {
-            this.name = name;
-            this.version = version;
-            this.filepath = filepath;
-            this.dependencies = dependencies;
-            this.optDependencies = optDependencies;
-            this.lastMod = lastMod;
-            this.lastAccess = lastAccess;
         }
 
         public ModDetail(string name, string version, string downloadUrl, string hash)
