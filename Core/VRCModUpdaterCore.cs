@@ -1,4 +1,4 @@
-using MelonLoader;
+﻿using MelonLoader;
 using Mono.Cecil;
 using Newtonsoft.Json;
 using System;
@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Threading;
+using System.Windows.Forms;
 using VRCModUpdater.API;
 using VRCModUpdater.Core.API;
 using VRCModUpdater.Core.Externs;
@@ -38,10 +38,11 @@ namespace VRCModUpdater.Core
         private static int tmpProgressTotal = 0, tmpProgressDownload = 0;
 
         private static int toUpdateCount = 0;
+        private static string msg;
 
         private static List<FailedUpdateInfo> failedUpdates = new List<FailedUpdateInfo>();
 
-        private static MelonPreferences_Entry<bool> toFromBroken, resolveDependencies, resolveOptionalDependencies;
+        private static MelonPreferences_Entry<bool> toFromBroken, resolveDependencies, resolveOptionalDependencies, popUpMsg;
 
         public static void Start()
         {
@@ -50,6 +51,7 @@ namespace VRCModUpdater.Core
             toFromBroken = prefCategory.CreateEntry("toFromBroken", true, "Attempt to move mods to and from Broken mods folder based on status in Remote API");
             resolveDependencies = prefCategory.CreateEntry("resolveDependencies", true, "Attempt to download missing required dependencies");
             resolveOptionalDependencies = prefCategory.CreateEntry("resolveOptionalDependencies", false, "Also attempt to download missing OPTIONAL dependencies");
+            popUpMsg = prefCategory.CreateEntry("popUpMsg", true, "Display pop up messsage box if mods are updated or moved to/from broken");
 
             if (float.TryParse(diplayTimeEntry.GetValueAsString(), out float diplayTime))
                 postUpdateDisplayDuration = diplayTime;
@@ -174,7 +176,7 @@ namespace VRCModUpdater.Core
                 string desktopFolder = $"{modsFolder}/Desktop";
                 string vrFolder = $"{modsFolder}/VR";
 
-                string[] folders = new string[3] { modsFolder, desktopFolder, vrFolder };
+                string[] folders = new string[3]{ modsFolder,desktopFolder,vrFolder};
 
                 foreach (string folder in folders)
                 {
@@ -198,6 +200,7 @@ namespace VRCModUpdater.Core
                                 string modName;
                                 string modVersion;
                                 string[] optDependencies = new string[0];
+                                List<string> depList = new List<string>();
 
                                 using (AssemblyDefinition assembly = AssemblyDefinition.ReadAssembly(filename, new ReaderParameters { ReadWrite = true }))
                                 {
@@ -211,38 +214,46 @@ namespace VRCModUpdater.Core
                                     modName = melonInfoAttribute.ConstructorArguments[1].Value as string;
                                     modVersion = melonInfoAttribute.ConstructorArguments[2].Value as string;
 
-                                }
-
-                                List<string> depList = new List<string>();
-                                if (resolveDependencies.Value)
-                                {
-                                    Assembly modAssembly = Assembly.Load(File.ReadAllBytes(filename)); //Only part about all of this I am suss about
-
-                                    MelonOptionalDependenciesAttribute optionals = (MelonOptionalDependenciesAttribute)Attribute.GetCustomAttribute(modAssembly, typeof(MelonOptionalDependenciesAttribute));
-
-                                    foreach (AssemblyName dependency in modAssembly.GetReferencedAssemblies())
+                                    if (resolveDependencies.Value)
                                     {
-                                        var depName = GetNewModName(dependency.Name);
-                                        if (remoteMods.ContainsKey(depName))
-                                        {//If dep is in RemoteAPI
-                                            if (!optionals?.AssemblyNames?.Contains(dependency.Name) ?? true) //Sum up all the deps
+                                        var optionals = new List<string>();
+                                        CustomAttribute melonOptDepend = assembly.CustomAttributes.FirstOrDefault(a =>
+                                        a.AttributeType.Name == "MelonOptionalDependenciesAttribute");
+                                        if (melonOptDepend != null)
+                                        {
+                                            foreach (var item in melonOptDepend.ConstructorArguments[0].Value as IEnumerable<CustomAttributeArgument>)
                                             {
-                                                if (!allDepList.Contains(depName)) allDepList.Add(depName);
-                                            }
-                                            else
-                                            {
-                                                if (!allDepList.Contains(depName) && !allOptDepList.Contains(depName)) allOptDepList.Add(depName);
-                                            }
-
-                                            if (resolveOptionalDependencies.Value || (!optionals?.AssemblyNames?.Contains(dependency.Name) ?? true))
-                                            {//If we want to add optional deps OR it's not in the optional dep list)
-                                                depList.Add(depName);
+                                                optionals.Add(item.Value.ToString());
                                             }
                                         }
+
+                                        var references = assembly.MainModule.AssemblyReferences;
+                                        foreach (var dependency in references)
+                                        {
+                                            var depName = GetNewModName(dependency.Name);
+                                            if (remoteMods.ContainsKey(depName))
+                                            {//If dep is in RemoteAPI
+                                                if (!optionals?.Contains(dependency.Name) ?? true) //Sum up all the deps
+                                                {
+                                                    if (!allDepList.Contains(depName)) allDepList.Add(depName);
+                                                }
+                                                else
+                                                {
+                                                    if (!allDepList.Contains(depName) && !allOptDepList.Contains(depName)) allOptDepList.Add(depName);
+                                                }
+
+                                                if (resolveOptionalDependencies.Value || (!optionals?.Contains(dependency.Name) ?? true))
+                                                {//If we want to add optional deps OR it's not in the optional dep list)
+                                                    depList.Add(depName);
+                                                }
+                                            }
+                                        }
+
                                     }
                                 }
 
                                 modName = GetNewModName(modName); // Backward mod compatibility
+                                MelonLogger.Msg($"Found {(!runOnce ? "" : "broken ")}mod: " + modName);
 
                                 if (dict.TryGetValue(modName, out ModDetail installedModDetail))
                                 {
@@ -260,7 +271,6 @@ namespace VRCModUpdater.Core
 
                                     continue;
                                 }
-
                                 dict.Add(modName, new ModDetail(modName, modVersion, filename, depList.ToArray(), optDependencies));
                             }
                             catch (Exception ex)
@@ -270,8 +280,8 @@ namespace VRCModUpdater.Core
                         }
                     }
                 }
-
                 MelonLogger.Msg(ConsoleColor.DarkCyan, "Found " + dict.Count + " unique non-dev mods " + $"{(!runOnce ? "installed" : "in Broken folder")}");
+
                 runOnce = true;
             }
 
@@ -314,6 +324,13 @@ namespace VRCModUpdater.Core
             Dictionary<string, ModDetail> toUpdate = new Dictionary<string, ModDetail>();
             Dictionary<string, ModDetail> checkDeps = new Dictionary<string, ModDetail>();
 
+            List<string> updateList = new List<string>();
+            List<string> depList = new List<string>();
+            List<string> toBrokenList = new List<string>();
+            List<string> fromBrokenList = new List<string>();
+
+
+
             // Check for broken mods with updates
             foreach (KeyValuePair<string, ModDetail> brokenMod in brokenMods)
             {
@@ -331,6 +348,7 @@ namespace VRCModUpdater.Core
                     {
                         toMods.Add(brokenMod.Key, new ModDetail(brokenMod.Key, brokenMod.Value.version, brokenMod.Value.filepath, remoteMod.downloadUrl, remoteMod.hash));
                         checkDeps.Add(brokenMod.Key, brokenMod.Value);
+                        fromBrokenList.Add("   " + brokenMod.Key);
                     }
                     continue;
                 }
@@ -349,15 +367,21 @@ namespace VRCModUpdater.Core
                     {
                         MelonLogger.Msg($"(Mod: {installedMod.Key}) Remote Approval Status is: Broken/Other - {remoteMod.approvalStatus}");
                         if (compareResult >= 0) // Don't move to broken if local version is higher than remote
+                        {
                             toBroken.Add(installedMod.Key, new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath));
+                            toBrokenList.Add("   " + installedMod.Key);
+                        }
                         else
                             MelonLogger.Msg($"Ignoring as local version is higer than remote. Remote: {remoteMod.version}, Local: {installedMod.Value.version}");
                         continue;
                     }
                     MelonLogger.Msg("(Mod: " + remoteMod.name + ") version compare between [remote] " + remoteMod.version + " and [local] " + installedMod.Value.version + ": " + compareResult);
                     if (compareResult > 0)
+                    {
                         toUpdate.Add(installedMod.Key, new ModDetail(installedMod.Key, installedMod.Value.version, installedMod.Value.filepath, remoteMod.downloadUrl, remoteMod.hash));
-                    checkDeps.Add(installedMod.Key, installedMod.Value);
+                        updateList.Add("   " + installedMod.Key);
+                    }
+                    if (!checkDeps.ContainsKey(installedMod.Key)) checkDeps.Add(installedMod.Key, installedMod.Value);
                     continue;
                 }
             }
@@ -368,24 +392,52 @@ namespace VRCModUpdater.Core
             {
                 foreach (var modtoCheck in checkDeps)
                 {//Check all installed mods
-                    foreach (var dep in modtoCheck.Value.dependencies)
+                    try
                     {
-                        if (!installedMods.ContainsKey(dep) && !toMods.ContainsKey(dep) && !toUpdate.ContainsKey(dep) && !brokenMods.ContainsKey(dep))
-                        {//If dep is not in Installed Mods, & it is not being added to Mods from Broken, & it isn't already in toUpdate, & it isn't in the broken mods folder
-                         //Dont want to install it twice... or more
-                            if (remoteMods.TryGetValue(dep, out ModDetail remoteDep))
-                            {
-                                if (remoteDep.approvalStatus != 1) //Dont add broken deps
-                                    continue;
-                                var newFileName = remoteDep.downloadUrl.Split('/').Last();
-                                var newPath = "Mods/" + newFileName;
-                                MelonLogger.Warning($"Adding Dependency '{newPath}' for Mod '{modtoCheck.Value.name}'");
-                                toUpdate.Add(remoteDep.name, new ModDetail(remoteDep.name, remoteDep.version, newPath, remoteDep.downloadUrl, remoteDep.hash));
+                        foreach (var dep in modtoCheck.Value.dependencies)
+                        {
+                            if (!installedMods.ContainsKey(dep) && !toMods.ContainsKey(dep) && !toUpdate.ContainsKey(dep) && !brokenMods.ContainsKey(dep))
+                            {//If dep is not in Installed Mods, & it is not being added to Mods from Broken, & it isn't already in toUpdate, & it isn't in the broken mods folder
+                             //Dont want to install it twice... or more
+                                if (remoteMods.TryGetValue(dep, out ModDetail remoteDep))
+                                {
+                                    if (remoteDep.approvalStatus != 1) //Dont add broken deps
+                                        continue;
+
+                                    HttpWebRequest request = (HttpWebRequest)WebRequest.Create(remoteDep.downloadUrl); //Get file name, this is needed after api v1 switch to using redirects 
+                                    request.AllowAutoRedirect = false;
+                                    request.UserAgent = APIConstants.USER_AGENT;
+                                    HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+                                    string redirUrl = response.Headers["Location"];
+                                    response.Close();
+                                    var newFileName = redirUrl.Split('/').Last();
+
+                                    var newPath = "Mods/" + newFileName;
+                                    MelonLogger.Warning($"Adding Dependency '{newPath}' for Mod '{modtoCheck.Value.name}'");
+                                    toUpdate.Add(remoteDep.name, new ModDetail(remoteDep.name, remoteDep.version, newPath, remoteDep.downloadUrl, remoteDep.hash));
+                                    depList.Add("   " + remoteDep.name);
+                                }
                             }
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        MelonLogger.Error("Error adding dependancies for " + modtoCheck + "\n" + ex.ToString());
+                    }
                 }
             }
+
+            if (popUpMsg.Value && ((updateList.Count > 0) || (depList.Count > 0) || (fromBrokenList.Count > 0) || (toBrokenList.Count > 0)))
+            {
+                msg =
+                    (updateList.Count > 0 ? "Downloading updates for:\n" + string.Join("\n", updateList) + "\n" : "") +
+                    (depList.Count > 0 ? "Adding the following mod dependencies:\n" + string.Join("\n", depList) + "\n" : "") +
+                    (fromBrokenList.Count > 0 ? "Moving from the broken folder:\n" + string.Join("\n", fromBrokenList) + "\n" : "") +
+                    (toBrokenList.Count > 0 ? "Moving to the broken folder:\n" + string.Join("\n", toBrokenList) : "");
+
+                new Thread(new ThreadStart(SpawnMessage)).Start();
+            }
+
 
             if (toFromBroken.Value)
             {
@@ -508,6 +560,12 @@ namespace VRCModUpdater.Core
                     i++;
                 }
             }
+        }
+
+        private static void SpawnMessage()
+        {
+            if (msg != null)
+                MessageBox.Show(new Form { TopMost = true }, msg, "VRCModUpdater");
         }
     }
 }
